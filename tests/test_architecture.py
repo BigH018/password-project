@@ -254,3 +254,17 @@ def test_only_demo_skips_the_password_policy(path: Path) -> None:
                 assert not (kw.arg == "check_policy" and is_off), (
                     f"line {node.lineno}: only demo.py may create a vault without the policy")
 
+
+
+# --- CR-L5: file pickers are Qt dialogs (auto-lock sees activity, lock can close them) -----
+PICKER_STATICS = {"getOpenFileName", "getSaveFileName", "getExistingDirectory",
+                  "getOpenFileNames", "getOpenFileUrl", "getSaveFileUrl"}
+
+
+@pytest.mark.parametrize("path", [p for p in UI_FILES if p.name != "file_pickers.py"],
+                         ids=_id)
+def test_file_pickers_only_via_file_pickers_module(path: Path) -> None:
+    for node in ast.walk(_parse(path)):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            assert node.func.attr not in PICKER_STATICS, (
+                f"line {node.lineno}: use ui/file_pickers.py (non-native, closable on lock)")

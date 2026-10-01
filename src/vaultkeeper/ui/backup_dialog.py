@@ -8,7 +8,6 @@ from pathlib import Path
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (
     QDialog,
-    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLineEdit,
@@ -22,6 +21,7 @@ from vaultkeeper.config import constants as c
 from vaultkeeper.core.backup import BackupService
 from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui import messages
+from vaultkeeper.ui.file_pickers import choose_folder
 from vaultkeeper.ui.messages import error_text, local_time_text
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE, WARNING_BANNER_STYLE
@@ -61,7 +61,7 @@ def after_password_change(parent: QWidget | None, backups: BackupService) -> str
 
 
 def _choose_folder(parent: QWidget, current: str) -> str:
-    return QFileDialog.getExistingDirectory(parent, "Choose a backup folder", current)
+    return choose_folder(parent, "Choose a backup folder", current)
 
 
 class BackupDialog(QDialog):

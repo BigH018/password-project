@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PyQt5.QtWidgets import QDialog, QFileDialog, QPushButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QDialog, QPushButton, QVBoxLayout, QWidget
 
-from vaultkeeper.config.constants import DISPLAY_NAME, VAULT_EXTENSION, WINDOW_TITLE
+from vaultkeeper.config.constants import DISPLAY_NAME, WINDOW_TITLE
+from vaultkeeper.ui.file_pickers import choose_open_file
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import MUTED_STYLE
 
@@ -16,10 +17,7 @@ FileChooser = Callable[[QWidget], str]
 
 def choose_vault_file(parent: QWidget) -> str:
     """Ask for an existing .vault file. Returns '' if cancelled."""
-    path, _ = QFileDialog.getOpenFileName(
-        parent, "Open a vault", "", f"Vault files (*{VAULT_EXTENSION})"
-    )
-    return path
+    return choose_open_file(parent, "Open a vault", "")
 
 
 class WelcomeDialog(QDialog):

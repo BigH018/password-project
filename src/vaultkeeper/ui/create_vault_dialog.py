@@ -8,7 +8,6 @@ from pathlib import Path
 from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtWidgets import (
     QDialog,
-    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLineEdit,
@@ -23,6 +22,7 @@ from vaultkeeper.core.password_policy import check_master_password
 from vaultkeeper.core.vault_disk import shared_folder_risk
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import WeakPasswordError
+from vaultkeeper.ui.file_pickers import choose_save_file
 from vaultkeeper.ui.messages import SHARED_FOLDER, error_text
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE, WARNING_BANNER_STYLE
@@ -34,10 +34,7 @@ PathChooser = Callable[[QWidget, str], str]
 
 
 def _choose_save_path(parent: QWidget, current: str) -> str:
-    path, _ = QFileDialog.getSaveFileName(
-        parent, "Choose where to save your vault", current, f"Vault files (*{VAULT_EXTENSION})"
-    )
-    return path
+    return choose_save_file(parent, "Choose where to save your vault", current)
 
 
 class CreateVaultDialog(QDialog):
