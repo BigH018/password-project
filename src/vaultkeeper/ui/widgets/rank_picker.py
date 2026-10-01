@@ -51,9 +51,16 @@ class RankPicker(QWidget):
         """Whether the current preset uses a typed rank."""
         return self._preset is not None and self._preset.free_text
 
-    def set_preset(self, preset: GamePreset, keep: Rank | None = None) -> None:
-        """Switch ladders. ``keep`` is shown if possible (default: the current rank)."""
+    def set_preset(self, preset: GamePreset, keep: Rank | None = None, *,
+                   listed_only: bool = False) -> None:
+        """Switch ladders. ``keep`` is shown if possible (default: the current rank).
+
+        A tier not in the ladder is shown marked, unless ``listed_only`` (switching to
+        another game): then it is reset to unranked.
+        """
         keep = self.rank() if keep is None else keep
+        if listed_only and not preset.free_text and keep.tier and preset.tier(keep.tier) is None:
+            keep = Rank()
         self._preset = preset
         self.stack.setCurrentIndex(1 if preset.free_text else 0)
         if preset.free_text:
@@ -123,10 +130,16 @@ class RegionPicker(QWidget):
         self.free.textChanged.connect(self.changed)
 
     def set_preset(self, preset: GamePreset, keep: str | None = None,
-                   use_current: bool = True) -> None:
-        """Switch region lists, keeping ``keep`` (default: the current value) if possible."""
+                   use_current: bool = True, *, listed_only: bool = False) -> None:
+        """Switch region lists, keeping ``keep`` (default: the current value) if possible.
+
+        A value not in the list is shown marked, unless ``listed_only`` (switching to
+        another game): then it is reset to none.
+        """
         if use_current and keep is None:
             keep = self.region()
+        if listed_only and not preset.free_text and keep and keep not in preset.regions:
+            keep = None
         self._preset = preset
         self.stack.setCurrentIndex(1 if preset.free_text else 0)
         if preset.free_text:

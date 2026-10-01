@@ -23,7 +23,7 @@ from PyQt5.QtWidgets import (
 
 from vaultkeeper.config.constants import STATUSES
 from vaultkeeper.core.game_template import CustomField, FieldKind, GameTemplate
-from vaultkeeper.core.models import Account, Game
+from vaultkeeper.core.models import Account, Game, Rank
 from vaultkeeper.ui.generator_dialog import GeneratorDialog
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.widgets.rank_picker import NOT_IN_LIST, RankPicker, RegionPicker
@@ -43,6 +43,7 @@ class AccountForm(QWidget):
         self._games = {g.id: g for g in games}
         self._base_game_id = ""
         self._base_extra: dict[str, str] = {}
+        self._base_rank, self._base_region = Rank(), None  # the stored account's values
         self._extra_widgets: dict[str, tuple[CustomField, ExtraWidget]] = {}
 
         self.game = QComboBox(self)
@@ -150,9 +151,8 @@ class AccountForm(QWidget):
             if account is not None:
                 self.region.set_preset(preset, keep=account.region, use_current=False)
                 self.rank.set_preset(preset, keep=account.rank)
-            else:
-                self.region.set_preset(preset)
-                self.rank.set_preset(preset)
+            else:  # the user picked another game
+                self._switch_pickers(game)
         for key, widgets in self._optional.items():
             visible = template.shows(key)
             for widget in widgets:
@@ -161,6 +161,18 @@ class AccountForm(QWidget):
             if label is not None and key != "tag":
                 label.setVisible(visible)
         self._build_extras(template.custom_fields, keep_extra)
+
+    def _switch_pickers(self, game: Game) -> None:
+        """Keep rank/region only if the new game lists them. Values outside the list are
+        kept only for the account's own stored game, so they never move to another game."""
+        preset = game.rank_preset
+        self.region.set_preset(preset, listed_only=True)
+        self.rank.set_preset(preset, listed_only=True)
+        if game.id == self._base_game_id:
+            if self.region.region() is None:
+                self.region.set_region(self._base_region)
+            if self.rank.rank().tier is None:
+                self.rank.set_rank(self._base_rank)
 
     def _build_extras(self, fields: tuple[CustomField, ...], values: dict[str, str]) -> None:
         while self.extra_layout.rowCount():
@@ -215,6 +227,7 @@ class AccountForm(QWidget):
         the "Choose a game..." placeholder and rank/region wait for a choice."""
         self._base_game_id = account.game_id
         self._base_extra = dict(account.extra)
+        self._base_rank, self._base_region = account.rank, account.region
         self.game.blockSignals(True)
         self.game.setCurrentIndex(max(self.game.findData(account.game_id), 0) if select_game
                                   else 0)

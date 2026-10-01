@@ -75,7 +75,9 @@ including the built-ins.
 - `GameService.set_template` is never blocked by existing accounts.
 - Hiding a standard field hides it in the form. The stored value is kept.
 - A rank, region, dropdown option or extra field that's removed from the template stays on
-  the accounts. The UI shows it marked "(not in this game's list)".
+  the accounts. The UI shows it marked "(not in this game's list)", for the account's own
+  game only: switching the form to another game resets a rank or region that game doesn't
+  list (switching back shows the stored value again).
 - When an account is **edited in the same game**, kept values are accepted if unchanged.
   Changing a value to something outside the template is rejected.
 - **Moving** an account to another game validates it fully against the new template. Extra

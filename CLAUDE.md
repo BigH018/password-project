@@ -265,7 +265,7 @@ vaultkeeper/                       repo root
     ui/                            pytest-qt: test_qt_adapters, test_unlock_dialog (never-silent
                                    backup, no freeze, closable while busy), test_create_vault_dialog,
                                    test_change_password_dialog, test_main_window (real demo vault),
-                                   test_account_dialog, test_game_setup, test_pickers,
+                                   test_account_dialog, test_game_setup, test_pickers (+ game switching),
                                    test_shell (welcome, controller lock/demo details),
                                    test_phase5_ui (copy, auto-lock, generator, backups, export),
                                    test_backup_ui (backups after a password change, failure
@@ -483,7 +483,9 @@ python -m vaultkeeper  # run the app
 - Lock closes every open dialog (drafts discarded via `force_close()`, no prompt), cancels
   pending work, clears the window.
 - Account dialog: rank/region are preset dropdowns (free text for custom games). A stored
-  value not in the preset is shown marked "(not in this game's list)" rather than dropped.
+  value not in the preset is shown marked "(not in this game's list)" rather than dropped,
+  but only for the account's own stored game (CR-M2): switching the form to another game
+  resets a rank/region that game doesn't list; switching back brings the stored value back.
   After saving, the edited/new row stays selected.
 - Per-game templates (4d): every game, built-ins included, has editable ranks (tiers + 0-10
   divisions, entered as "has divisions? how many?"), regions, shown standard fields and

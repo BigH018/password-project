@@ -87,3 +87,60 @@ def test_region_picker(region: RegionPicker) -> None:
 def test_region_legacy_value_kept(region: RegionPicker) -> None:
     region.set_preset(c.OVERWATCH, keep="EU")
     assert region.combo.currentText() == "EU" + NOT_IN_LIST and region.region() == "EU"
+
+
+# --- CR-M2: switching game on the account form --------------------------------------------
+
+
+def _form(qtbot: Any, account: Any, games: list[Any]) -> Any:
+    from vaultkeeper.ui.widgets.account_form import AccountForm
+
+    form = AccountForm(games)
+    qtbot.addWidget(form)
+    form.load(account)
+    return form
+
+
+def _pick(form: Any, game: Any) -> None:
+    form.game.setCurrentIndex(form.game.findData(game.id))
+
+
+def _marked(form: Any) -> bool:
+    texts = _texts(form.rank.tier) + _texts(form.region.combo)
+    return any(NOT_IN_LIST in t for t in texts)
+
+
+def test_switching_game_resets_values_the_new_game_lacks(qtbot: Any) -> None:
+    from fake_data import make_account, make_game
+
+    val, ow = make_game("Valorant", "valorant"), make_game("Overwatch", "overwatch")
+    form = _form(qtbot, make_account(val, rank=Rank("Ascendant", 2), region="EU"), [val, ow])
+    _pick(form, ow)
+    assert form.rank.rank() == Rank() and form.region.region() is None
+    assert not _marked(form)
+    saved = form.to_account(make_account(val))
+    assert saved.rank == Rank() and saved.region is None
+
+
+def test_switching_game_keeps_values_both_games_have(qtbot: Any) -> None:
+    from fake_data import make_account, make_game
+
+    val, ow = make_game("Valorant", "valorant"), make_game("Overwatch", "overwatch")
+    form = _form(qtbot, make_account(val, rank=Rank("Gold", 2), region="EU"), [val, ow])
+    _pick(form, ow)
+    assert form.rank.rank() == Rank("Gold", 2)
+
+
+def test_own_games_unlisted_values_come_back_only_there(qtbot: Any) -> None:
+    from fake_data import make_account, make_game
+
+    val, ow = make_game("Valorant", "valorant"), make_game("Overwatch", "overwatch")
+    account = make_account(val, rank=Rank("Old Tier", None), region="Moon Base")
+    form = _form(qtbot, account, [val, ow])
+    assert form.rank.tier.currentText() == "Old Tier" + NOT_IN_LIST
+    _pick(form, ow)
+    assert form.rank.rank() == Rank() and form.region.region() is None
+    assert not _marked(form)
+    _pick(form, val)  # back to the account's own game: stored values shown again
+    assert form.rank.rank() == Rank("Old Tier", None)
+    assert form.region.region() == "Moon Base"
