@@ -101,6 +101,20 @@ Template rules (tier, division, region, extra values) are checked when an accoun
 - Rank order: Unranked < ladder tiers (no division < lowest division … highest) < tiers not
   in the ladder (alphabetical).
 
+## Paste assist (`core/paste_assist.py`)
+
+Turns one pasted block into suggestions for the selected game. It never saves.
+- Labeled lines first: `user:`/`login:`, `pass:`/`password:`, `email:`, `email pass:`,
+  `recovery:`, `riot id:`/`ign:`/`name:`, `tag:`, `region:`, `rank:`, `status:`,
+  `notes:`, and any extra field's label.
+- Values of login/password lines are never scanned by the other rules.
+- Unlabeled text: first `@` token -> email (a second -> recovery email); `name#tag`
+  (no spaces; use `ign:` for names with spaces); a tier from the game's ladder or a known
+  short form, plus a valid division; a region of the game (codes like EU/NA map to the
+  game's names); `banned` -> status banned plus a note.
+- Quick Add fills only EMPTY fields (status and notes are applied too) and shows what it
+  filled, never the values.
+
 ## Duplicate rule
 
 This is a non-blocking warning. Inside the same game, two accounts are duplicates if either of

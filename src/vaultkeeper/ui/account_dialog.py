@@ -24,6 +24,7 @@ class AccountDialog(QDialog):
         account: Account | None = None,
         default_game_id: str | None = None,
         parent: QWidget | None = None,
+        draft: Account | None = None,
     ) -> None:
         super().__init__(parent)
         self._accounts = accounts
@@ -31,7 +32,7 @@ class AccountDialog(QDialog):
         # New account without a game context (e.g. "All games" selected): make the user pick.
         must_choose = self._is_new and default_game_id is None and len(games) > 1
         game_id = default_game_id or (games[0].id if games else "")
-        self._base = account if account is not None else accounts.new_draft(game_id)
+        self._base = account or draft or accounts.new_draft(game_id)
         self.saved: Account | None = None
         self.setWindowTitle("Add account" if self._is_new else "Edit account")
         self.setMinimumWidth(520)
@@ -114,8 +115,12 @@ class AccountDialog(QDialog):
         except VaultKeeperError as exc:
             self.error_label.setText(messages.error_text(exc))
             return
-        self.saved = stored
         self._initial = self._snapshot()  # nothing unsaved any more
+        self._saved_ok(stored)
+
+    def _saved_ok(self, stored: Account) -> None:
+        """After a successful save. Quick Add overrides this to start the next entry."""
+        self.saved = stored
         super().accept()
 
     # --- closing ------------------------------------------------------------------------

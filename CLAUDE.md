@@ -154,8 +154,8 @@ vaultkeeper/                       repo root
       search.py                    AccountFilter, free-text search (never secrets), facets, rank sort key
       backup.py                    rotating backups (byte copies of the encrypted vault), keep N
       exporter.py                  encrypted export (own password, file kind EXPORT, .vault)
-      entry_session.py        (P)  Quick Add batch state: sticky fields + session counter
-      paste_assist.py         (P)  paste block -> field suggestions (pure, never saves)
+      entry_session.py             Quick Add batch state: sticky game/region/status + counter
+      paste_assist.py              paste block -> field suggestions (pure, never saves)
       generator.py                 password generator (secrets only)
       totp.py                 (P)  TOTP code + seconds remaining
     crypto/
@@ -187,7 +187,8 @@ vaultkeeper/                       repo root
       account_dialog.py            add/edit: AccountForm + live duplicate warning + unsaved-changes
                                    prompt (force_close() skips it on lock)
       game_setup_dialog.py         Game setup: list + editor (starter, ranks, regions, fields, extras)
-      quick_add_dialog.py     (P)  keyboard-first batch entry + paste box + duplicate warning
+      quick_add_dialog.py          Quick Add (AccountDialog subclass): Enter = save & next,
+                                   batch values, counter, paste box, Ctrl+Enter anywhere
       settings_dialog.py      (P)  timeouts, backup folder, keep-N, columns
       generator_dialog.py          password generator (copy or "use" into the form)
       messages.py                  generic error texts (error_text) + confirm/error boxes
@@ -226,13 +227,15 @@ vaultkeeper/                       repo root
     test_templates.py              templates: presets, codec, validation, extra values, secret search
     test_migrations.py             schema v1 -> v2 (incl. a real encrypted v1 vault)
     test_backup.py, test_exporter.py, test_clipboard.py, test_autolock.py, test_generator.py
-    test_entry_session.py, test_paste_assist.py, test_totp.py                          (P)
+    test_entry_session.py, test_paste_assist.py
+    test_totp.py                                                                       (P)
     ui/                            pytest-qt: test_qt_adapters, test_unlock_dialog (never-silent
                                    backup, no freeze, closable while busy), test_create_vault_dialog,
                                    test_change_password_dialog, test_main_window (real demo vault),
                                    test_account_dialog, test_game_setup, test_pickers,
                                    test_shell (welcome, controller lock/demo details),
-                                   test_phase5_ui (copy, auto-lock, generator, backups, export)
+                                   test_phase5_ui (copy, auto-lock, generator, backups, export),
+                                   test_quick_add (save & next, batch, paste, keys, timeout)
 ```
 
 ---
@@ -446,6 +449,14 @@ python -m vaultkeeper  # run the app
 - A cancelled export writes nothing (checked after the KDF, before writing).
 - UI tests: `QApplication.quit` is a no-op (`tests/ui_support.py`); a controller quitting
   at teardown used to stop event delivery for later tests.
+- Quick Add (Ctrl+Shift+N): Enter saves and starts a fresh form (Ctrl+Enter also works in
+  Notes/paste box); Esc closes (asks if anything is typed). Game, region and status stick
+  between entries; the "N added this session" counter resets on lock. While it's open the
+  auto-lock timeout is the Quick Add one (default 15 min).
+- Paste assist: labeled lines win (user:/pass:/email:/riot id:/region:/rank:/status: and
+  extra-field labels); login/password values are never scanned by other rules; unlabeled
+  text: @ -> email, name#tag, rank words (+ short forms like plat/imm/t500) and regions of
+  the selected game, "banned" -> status + note. It fills EMPTY fields only and never saves.
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
   logs), deleted on exit; leftovers are swept at the next demo start. Real settings untouched.
 
@@ -461,6 +472,6 @@ python -m vaultkeeper  # run the app
   - [x] 4c: account dialog, game manager
   - [x] 4d: per-game templates (custom ranks/regions/fields/extra fields), Game setup, schema v2
 - [x] Phase 5: Clipboard, auto-lock, generator, export, backups
-- [ ] Phase 6: Quick Add, batch mode, paste assist
+- [x] Phase 6: Quick Add, batch mode, paste assist
 - [ ] Phase 7: TOTP
 - [ ] Phase 8: Polish + packaging

@@ -123,8 +123,13 @@ class AccountForm(QWidget):
 
     # --- game / template --------------------------------------------------------------------
 
-    def _current_game(self) -> Game | None:
+    @property
+    def current_game(self) -> Game | None:
+        """The selected game (None while "Choose a game..." is showing)."""
         return self._games.get(self.game.currentData())
+
+    def _current_game(self) -> Game | None:
+        return self.current_game
 
     @property
     def has_game(self) -> bool:

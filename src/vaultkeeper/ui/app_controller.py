@@ -73,6 +73,8 @@ class AppController(QObject):
         self.window.backup_now_requested.connect(self._backup_now)
         self.window.export_requested.connect(self._export)
         self.guard.lock_needed.connect(self._auto_lock)
+        self.window.quick_add_opened.connect(self._quick_add_opened)
+        self.window.quick_add_closed.connect(self.guard.tracker.pop_override)
 
     # --- flow -------------------------------------------------------------------------------
 
@@ -207,6 +209,10 @@ class AppController(QObject):
             if isinstance(widget, QDialog) and widget.isVisible():
                 # force_close skips "discard changes?" prompts: locking always wins.
                 getattr(widget, "force_close", widget.reject)()
+
+    def _quick_add_opened(self) -> None:
+        """You type from another window while Quick Add is open: use the longer timeout."""
+        self.guard.tracker.push_override(self._settings.quick_add_autolock_minutes * 60)
 
     def _auto_lock(self, reason: str) -> None:
         log.info("Auto-lock (%s)", reason)
