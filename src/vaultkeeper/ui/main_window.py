@@ -6,20 +6,25 @@ to the controller.
 
 from __future__ import annotations
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, Qt, pyqtSignal
 from PyQt5.QtGui import QCloseEvent, QKeySequence
 from PyQt5.QtWidgets import QAction, QLabel, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
 from vaultkeeper.config.constants import APP_NAME
 from vaultkeeper.core.account_service import AccountService
 from vaultkeeper.core.game_service import GameService
+from vaultkeeper.core.models import Game
 from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui.account_dialog import AccountDialog
 from vaultkeeper.ui.accounts_view import AccountsPanel
+from vaultkeeper.ui.copy_actions import CopyActions
 from vaultkeeper.ui.game_setup_dialog import GameSetupDialog
+from vaultkeeper.ui.generator_dialog import GeneratorDialog
 from vaultkeeper.ui.messages import confirm, error_text, show_error
 from vaultkeeper.ui.theme import MUTED_STYLE, WARNING_BANNER_STYLE
 
+BACKUPS_OFF = ("Backups are off. <a href='setup'>Choose a backup folder</a> before entering "
+               "real accounts.")
 BACKUP_BANNER = (
     "Opened from the backup copy. When you next save, the damaged vault file will be kept "
     "aside as a separate '.damaged' file and replaced. The backup copy itself is not touched."
@@ -32,6 +37,10 @@ class MainWindow(QMainWindow):
     lock_requested = pyqtSignal()
     quit_requested = pyqtSignal()
     change_password_requested = pyqtSignal()
+    minimized = pyqtSignal()
+    backups_requested = pyqtSignal()
+    backup_now_requested = pyqtSignal()
+    export_requested = pyqtSignal()
 
     def __init__(self, demo: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -45,7 +54,12 @@ class MainWindow(QMainWindow):
         self.banner.setWordWrap(True)
         self.banner.setStyleSheet(WARNING_BANNER_STYLE)
         self.banner.hide()
+        self.backups_off = QLabel(BACKUPS_OFF, self)
+        self.backups_off.setStyleSheet(WARNING_BANNER_STYLE)
+        self.backups_off.linkActivated.connect(lambda _link: self.backups_requested.emit())
+        self.backups_off.hide()
         self.panel = AccountsPanel(self)
+        self.copy = CopyActions(self, self.panel, self._game_by_id)
         self.locked_label = QLabel("Locked", self)
         self.locked_label.setAlignment(Qt.AlignCenter)
         self.locked_label.setStyleSheet(MUTED_STYLE)
@@ -56,6 +70,7 @@ class MainWindow(QMainWindow):
         central = QWidget(self)
         layout = QVBoxLayout(central)
         layout.addWidget(self.banner)
+        layout.addWidget(self.backups_off)
         layout.addWidget(self.stack, 1)
         self.setCentralWidget(central)
 
@@ -79,6 +94,14 @@ class MainWindow(QMainWindow):
         self.change_password_action = action("Change master password...")
         self.manage_games_action = action("Game setup...")
         self.quit_action = action("&Quit", "Ctrl+Q")
+        self.generator_action = action("Generate password...", "Ctrl+G")
+        self.backups_action = action("Backups...")
+        self.backup_now_action = action("Backup now")
+        self.export_action = action("Export encrypted copy...")
+        self.generator_action.triggered.connect(self._open_generator)
+        self.backups_action.triggered.connect(self.backups_requested)
+        self.backup_now_action.triggered.connect(self.backup_now_requested)
+        self.export_action.triggered.connect(self.export_requested)
         # Delete key only acts while the table has focus (never while typing in a field).
         self.delete_action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
         self.panel.table.addAction(self.delete_action)
@@ -97,6 +120,9 @@ class MainWindow(QMainWindow):
         for act in (self.add_action, self.edit_action, self.delete_action):
             toolbar.addAction(act)
         toolbar.addSeparator()
+        for act in self.copy.main_actions:
+            toolbar.addAction(act)
+        toolbar.addSeparator()
         toolbar.addAction(self.show_passwords_action)
         toolbar.addSeparator()
         toolbar.addAction(self.lock_action)
@@ -105,9 +131,15 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.change_password_action)
         file_menu.addAction(self.lock_action)
         file_menu.addSeparator()
+        file_menu.addAction(self.backup_now_action)
+        file_menu.addAction(self.backups_action)
+        file_menu.addAction(self.export_action)
+        file_menu.addSeparator()
         file_menu.addAction(self.quit_action)
         games_menu = self.menuBar().addMenu("&Games")
         games_menu.addAction(self.manage_games_action)
+        tools_menu = self.menuBar().addMenu("&Tools")
+        tools_menu.addAction(self.generator_action)
 
     # --- states -----------------------------------------------------------------------------
 
@@ -117,6 +149,7 @@ class MainWindow(QMainWindow):
         self.panel.clear()
         self.show_passwords_action.setChecked(False)
         self.banner.hide()
+        self.backups_off.hide()
         self.stack.setCurrentWidget(self.locked_label)
         self._update_actions()
         self.statusBar().showMessage("Locked")
@@ -139,14 +172,39 @@ class MainWindow(QMainWindow):
     def _update_actions(self) -> None:
         unlocked = self.unlocked
         for act in (self.lock_action, self.change_password_action, self.show_passwords_action,
-                    self.add_action, self.manage_games_action):
+                    self.add_action, self.manage_games_action, self.backups_action,
+                    self.backup_now_action, self.export_action):
             act.setEnabled(unlocked)
         selected = unlocked and self.panel.selected_account() is not None
         self.delete_action.setEnabled(selected)
         self.edit_action.setEnabled(selected)
+        self.copy.set_enabled(selected)
         if unlocked:
             self.statusBar().showMessage(
                 f"{self.panel.shown} of {self.panel.total} accounts  |  Vault: {self._vault_path}")
+
+    def set_backups_enabled(self, enabled: bool) -> None:
+        """Show the "backups are off" banner while unlocked without a backup folder."""
+        self.backups_off.setVisible(self.unlocked and not enabled)
+
+    def context_extra_actions(self) -> list[QAction]:
+        """Non-copy actions offered in the table's right-click menu."""
+        return [self.edit_action, self.delete_action]
+
+    def _game_by_id(self, game_id: str) -> Game | None:
+        if self._games is None:
+            return None
+        return next((g for g in self._games.list_games() if g.id == game_id), None)
+
+    def _open_generator(self) -> None:
+        GeneratorDialog(copy=lambda pw: self.copy.copy_value(pw, "Password"),
+                        parent=self).exec_()
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Report minimizing (auto-lock on minimize)."""
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange and self.isMinimized():
+            self.minimized.emit()
 
     # --- actions ----------------------------------------------------------------------------
 

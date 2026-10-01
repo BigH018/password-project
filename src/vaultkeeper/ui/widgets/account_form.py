@@ -18,12 +18,14 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QPlainTextEdit,
+    QPushButton,
     QWidget,
 )
 
 from vaultkeeper.config.constants import STATUSES
 from vaultkeeper.core.game_template import CustomField, FieldKind, GameTemplate
 from vaultkeeper.core.models import Account, Game
+from vaultkeeper.ui.generator_dialog import GeneratorDialog
 from vaultkeeper.ui.widgets.rank_picker import NOT_IN_LIST, RankPicker, RegionPicker
 from vaultkeeper.ui.widgets.secret_field import SecretField
 
@@ -56,6 +58,8 @@ class AccountForm(QWidget):
         self.tag.setMaximumWidth(110)
         self.login = QLineEdit(self)
         self.password = SecretField("Account password", self)
+        self.generate_button = QPushButton("Generate...", self)
+        self.generate_button.setToolTip("Create a strong random password")
         self.email = QLineEdit(self)
         self.email_password = SecretField("Email password (optional)", self)
         self.email_url = QLineEdit(self)
@@ -79,11 +83,14 @@ class AccountForm(QWidget):
         name_row.addWidget(self.display_name, 1)
         name_row.addWidget(self.hash_label)
         name_row.addWidget(self.tag)
+        password_row = QHBoxLayout()
+        password_row.addWidget(self.password, 1)
+        password_row.addWidget(self.generate_button)
         self.form = QFormLayout(self)
         self.form.setContentsMargins(0, 0, 0, 0)
         for label, widget in (
             ("Game", self.game), ("Name", name_row), ("Login", self.login),
-            ("Password", self.password), ("Email", self.email),
+            ("Password", password_row), ("Email", self.email),
             ("Email password", self.email_password), ("Email login URL", self.email_url),
             ("Region", self.region), ("Rank", self.rank), ("Status", self.status),
             ("Recovery email", self.recovery_email), ("Labels", self.tags), ("Notes", self.notes),
@@ -98,6 +105,7 @@ class AccountForm(QWidget):
         }  # fmt: skip
 
         self.game.currentIndexChanged.connect(self._game_changed)
+        self.generate_button.clicked.connect(self._generate_password)
         for edit in (self.display_name, self.tag, self.login, self.email, self.email_url,
                      self.recovery_email, self.tags):
             edit.textChanged.connect(self.changed)
@@ -107,6 +115,11 @@ class AccountForm(QWidget):
             picker.changed.connect(self.changed)
         self.status.currentIndexChanged.connect(self.changed)
         self.notes.textChanged.connect(self.changed)
+
+    def _generate_password(self) -> None:
+        dialog = GeneratorDialog(allow_use=True, parent=self)
+        if dialog.exec_() and dialog.password:
+            self.password.setText(dialog.password)
 
     # --- game / template --------------------------------------------------------------------
 

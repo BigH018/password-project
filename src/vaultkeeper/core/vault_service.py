@@ -71,6 +71,8 @@ class VaultService:
         self._session: _Session | None = None
         self._opened_from_backup = False
         self.last_damaged_copy: Path | None = None
+        # Called after every successful write (e.g. the backup service). Never get data.
+        self.on_saved: list[Callable[[], None]] = []
 
     # --- state ------------------------------------------------------------------------------
 
@@ -269,6 +271,11 @@ class VaultService:
             self.last_damaged_copy = quarantine
             log.warning("Damaged vault file kept aside; backup left untouched")
         self._opened_from_backup = False
+        for listener in list(self.on_saved):
+            try:
+                listener()
+            except Exception:  # a listener must never break saving
+                log.exception("Save listener failed")
 
     @staticmethod
     def _verifier(key: bytearray) -> Callable[[bytes], None]:

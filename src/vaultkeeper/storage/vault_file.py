@@ -154,3 +154,38 @@ def cleanup_stale_temp_files(path: Path) -> None:
     """Remove temp files left behind by an earlier crash (never touches vault or .bak)."""
     _remove_quietly(tmp_path(path))
     _remove_quietly(_backup_tmp_path(path))
+
+
+def copy_file_verified(source: Path, target: Path) -> None:
+    """Copy ``source`` to ``target`` atomically (tmp + fsync + replace) and verify the bytes.
+
+    Used for backups: the vault file is already encrypted, so this never sees plaintext.
+    """
+    data = read_vault_bytes(source)
+
+    def same_bytes(written: bytes) -> None:
+        if written != data:
+            raise VaultFormatError("Backup copy does not match the vault file.")
+
+    write_bytes_atomic(target, data, same_bytes)
+
+
+def write_bytes_atomic(path: Path, data: bytes, verify: Verifier) -> None:
+    """Atomic write (tmp + fsync + verify + replace) without keeping a .bak."""
+    tmp = tmp_path(path)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _write_and_sync(tmp, data)
+        try:
+            verify(tmp.read_bytes())
+        except VaultKeeperError as exc:
+            raise VaultIOError("The written file failed verification; nothing was changed.") \
+                from exc
+        _replace(tmp, path)
+        _fsync_dir(path.parent)
+    except OSError as exc:
+        _remove_quietly(tmp)
+        raise VaultIOError("Could not write the file.") from exc
+    except BaseException:
+        _remove_quietly(tmp)
+        raise

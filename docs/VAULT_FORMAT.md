@@ -119,6 +119,15 @@ newer versions. Migrations live in `core/migrations.py` as `migrate_vN_to_vN+1`,
 
 Storage stays bytes-only. The verify callback (decrypt + parse) is injected by `vault_service`.
 
+## Backups and exports
+
+- **Backups** (`core/backup.py`) are byte-for-byte copies of the encrypted vault file,
+  written atomically and compared with the source before they replace anything. They open
+  with the same master password. Name: `<vault stem>-backup-YYYYMMDD-HHMMSS.vault`.
+- **Exports** (`core/exporter.py`) are the same format with `file_kind = 2` and their own
+  password, salt and key. They're decrypted and parsed before replacing anything. The app
+  refuses to open an export as a vault (kind check). The recovery script reads both.
+
 ## Recovery script (`scripts/recover_vault.py`)
 
 Standalone. Imports only the stdlib, `cryptography` and `argon2-cffi`, and never `vaultkeeper`.

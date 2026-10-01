@@ -95,3 +95,17 @@ def no_real_message_boxes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(messages, "show_error", lambda *_a, **_k: None)
     monkeypatch.setattr(main_window, "confirm", lambda *_a, **_k: True)
     monkeypatch.setattr(main_window, "show_error", lambda *_a, **_k: None)
+
+
+@pytest.fixture(autouse=True)
+def app_never_quits(monkeypatch: pytest.MonkeyPatch) -> list[bool]:
+    """Stop tests from ending the shared QApplication.
+
+    The controller's quit() calls QApplication.quit(). When pytest-qt closes a controller's
+    window at teardown, that would stop event delivery for every later test.
+    """
+    from PyQt5.QtWidgets import QApplication
+
+    calls: list[bool] = []
+    monkeypatch.setattr(QApplication, "quit", staticmethod(lambda: calls.append(True)))
+    return calls

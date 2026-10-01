@@ -1,7 +1,9 @@
-"""Qt implementations of core interfaces.
+"""Qt implementations of core/security interfaces.
 
-``QtTaskRunner`` runs slow work (Argon2) on a background thread and delivers results on the
-UI thread through a queued Qt signal.
+``QtClipboardBackend``/``qt_schedule`` feed ``security.clipboard.ClipboardGuard``;
+``ActivityFilter`` and ``SessionLockWatcher`` feed auto-lock. ``QtTaskRunner`` runs slow
+work (Argon2) on a background thread and delivers results on the UI thread through a queued
+Qt signal.
 
 It uses plain *daemon* threads on purpose. Qt's thread pool waits for running tasks when the
 app quits, so a hung key derivation would make the app impossible to close. A daemon thread
@@ -11,11 +13,13 @@ away from (for example by closing the dialog).
 
 from __future__ import annotations
 
+import sys
 import threading
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtCore import QEvent, QMimeData, QObject, QTimer, pyqtSignal
+from PyQt5.QtWidgets import QApplication
 
 T = TypeVar("T")
 
@@ -75,3 +79,116 @@ class QtTaskRunner:
             on_success(payload)
         else:
             on_error(payload)  # type: ignore[arg-type]
+
+
+# --- clipboard ------------------------------------------------------------------------------
+
+# Windows clipboard formats that keep a copy out of Clipboard History (Win+V), cloud clipboard
+# sync and clipboard monitors. Same approach as KeePassXC. Ignored on other platforms.
+_EXCLUDE_FORMATS = {
+    "ExcludeClipboardContentFromMonitorProcessing": b"\x01\x00\x00\x00",
+    "CanIncludeInClipboardHistory": b"\x00\x00\x00\x00",
+    "CanUploadToCloudClipboard": b"\x00\x00\x00\x00",
+}
+
+
+class QtClipboardBackend:
+    """ClipboardBackend on top of QClipboard."""
+
+    def __init__(self) -> None:
+        self._clipboard = QApplication.clipboard()
+
+    def set_text(self, text: str) -> None:
+        """Copy text, marked as excluded from clipboard history/sync on Windows."""
+        mime = QMimeData()
+        mime.setText(text)
+        if sys.platform == "win32":
+            for name, value in _EXCLUDE_FORMATS.items():
+                mime.setData(name, value)
+        self._clipboard.setMimeData(mime)
+
+    def text(self) -> str:
+        """Current clipboard text."""
+        return self._clipboard.text()
+
+    def clear(self) -> None:
+        """Empty the clipboard."""
+        self._clipboard.clear()
+
+
+class _QtTimerHandle:
+    def __init__(self, seconds: float, fn: Callable[[], None]) -> None:
+        self._timer = QTimer()
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(fn)
+        self._timer.start(int(seconds * 1000))
+
+    def cancel(self) -> None:
+        self._timer.stop()
+
+
+def qt_schedule(seconds: float, fn: Callable[[], None]) -> _QtTimerHandle:
+    """Scheduler for ClipboardGuard: run ``fn`` once after ``seconds`` on the UI thread."""
+    return _QtTimerHandle(seconds, fn)
+
+
+# --- activity & session lock ----------------------------------------------------------------
+
+
+class ActivityFilter(QObject):
+    """App-wide event filter: reports key/mouse activity (for auto-lock)."""
+
+    def __init__(self, on_activity: Callable[[], None]) -> None:
+        super().__init__()
+        self._on_activity = on_activity
+        self._types = {QEvent.KeyPress, QEvent.MouseButtonPress, QEvent.MouseMove,
+                       QEvent.Wheel}
+
+    def eventFilter(self, _obj: QObject, event: Any) -> bool:  # noqa: N802 - Qt API
+        if event.type() in self._types:
+            self._on_activity()
+        return False  # never swallow events
+
+
+_WM_WTSSESSION_CHANGE = 0x02B1
+_WTS_SESSION_LOCK = 0x7
+
+
+class SessionLockWatcher:
+    """Calls ``on_lock`` when Windows locks the workstation (Win+L, sleep, user switch).
+
+    Uses WTSRegisterSessionNotification through ctypes (stdlib). Does nothing elsewhere.
+    """
+
+    def __init__(self, window_id: int, on_lock: Callable[[], None]) -> None:
+        self._on_lock = on_lock
+        self._filter: Any = None
+        self.active = False
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+
+            from PyQt5.QtCore import QAbstractNativeEventFilter, QCoreApplication
+
+            wtsapi = ctypes.WinDLL("wtsapi32")
+            if not wtsapi.WTSRegisterSessionNotification(ctypes.c_void_p(window_id), 0):
+                return
+            watcher = self
+
+            class _Filter(QAbstractNativeEventFilter):
+                def nativeEventFilter(self, event_type: Any, message: Any) -> Any:  # noqa: N802
+                    if event_type == b"windows_generic_MSG":
+                        from ctypes import wintypes
+
+                        msg = wintypes.MSG.from_address(int(message))
+                        if (msg.message == _WM_WTSSESSION_CHANGE
+                                and msg.wParam == _WTS_SESSION_LOCK):
+                            watcher._on_lock()
+                    return False, 0
+
+            self._filter = _Filter()
+            QCoreApplication.instance().installNativeEventFilter(self._filter)
+            self.active = True
+        except (OSError, AttributeError):
+            self.active = False  # unavailable: the other auto-lock triggers still apply

@@ -40,8 +40,8 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | App startup, demo mode | app.py, demo.py, ui/app_controller.py | config/settings.py, config/logging_setup.py, tests/test_demo.py |
 | Game templates, Game setup | docs/DATA_MODEL.md, core/game_template.py, core/template_validation.py, ui/game_setup_dialog.py | ui/widgets/ladder_editor.py, extra_fields_editor.py, account_form.py, tests/test_templates.py, tests/ui/test_game_setup.py |
 | Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures, core/validation.py signatures | tests/test_paste_assist.py, test_entry_session.py |
-| Clipboard, auto-lock, session lock | security/*, ui/qt_adapters.py | tests/test_clipboard.py, test_autolock.py |
-| Backups, export | core/backup.py, core/exporter.py, storage/vault_file.py | docs/VAULT_FORMAT.md |
+| Clipboard, auto-lock, session lock | security/*, ui/session_guard.py, ui/qt_adapters.py, ui/copy_actions.py | tests/test_clipboard.py, test_autolock.py, tests/ui/test_phase5_ui.py |
+| Backups, export | core/backup.py, core/exporter.py, storage/vault_file.py, ui/backup_dialog.py, ui/export_dialog.py | docs/VAULT_FORMAT.md, ui/app_controller.py (wiring) |
 | Password generator, TOTP | core/generator.py or core/totp.py, and the matching dialog | matching test file |
 | Settings, paths, logging | config/*, ui/settings_dialog.py | |
 | Packaging, dependencies | packaging/, pyproject.toml, requirements*.txt | |
@@ -152,11 +152,11 @@ vaultkeeper/                       repo root
       account_service.py           account CRUD + duplicate detection (warning only)
       game_service.py              add (starter/template) / rename / set_template (never blocked) / delete
       search.py                    AccountFilter, free-text search (never secrets), facets, rank sort key
-      backup.py               (P)  rotating encrypted backups + "backup now"
-      exporter.py             (P)  encrypted export with its own password
+      backup.py                    rotating backups (byte copies of the encrypted vault), keep N
+      exporter.py                  encrypted export (own password, file kind EXPORT, .vault)
       entry_session.py        (P)  Quick Add batch state: sticky fields + session counter
       paste_assist.py         (P)  paste block -> field suggestions (pure, never saves)
-      generator.py            (P)  password generator (secrets only)
+      generator.py                 password generator (secrets only)
       totp.py                 (P)  TOTP code + seconds remaining
     crypto/
       kdf.py                       Argon2id derivation + param bounds
@@ -166,10 +166,15 @@ vaultkeeper/                       repo root
     storage/
       vault_file.py                atomic write, verify-before-replace, .bak retention, .damaged quarantine
     security/
-      clipboard.py            (P)  ClipboardGuard: copy + auto-clear if unchanged
-      autolock.py             (P)  inactivity logic, Quick Add timeout override (injected clock)
+      clipboard.py                 ClipboardGuard: copy + auto-clear only if unchanged
+      autolock.py                  InactivityTracker: timeout, Quick Add override (injected clock)
     ui/
-      qt_adapters.py               QtTaskRunner (daemon threads, cancel_pending); later clipboard/timers
+      qt_adapters.py               QtTaskRunner, QtClipboardBackend (Win+V exclusion), qt_schedule,
+                                   ActivityFilter, SessionLockWatcher (Windows lock via ctypes)
+      session_guard.py             ClipboardGuard + auto-lock wiring; emits lock_needed(reason)
+      copy_actions.py              copy actions (Ctrl+B/C/E on the table) + right-click menu
+      backup_dialog.py             backup folder / keep N / interval + Backup now
+      export_dialog.py             encrypted export (own password; cancel writes nothing)
       app_controller.py            screen flow: welcome -> create/unlock -> main; lock (closes dialogs); quit
       theme.py                     Fusion + dark palette, shared label styles (QSS in Phase 8)
       welcome_dialog.py            create new vault / open existing file
@@ -184,7 +189,7 @@ vaultkeeper/                       repo root
       game_setup_dialog.py         Game setup: list + editor (starter, ranks, regions, fields, extras)
       quick_add_dialog.py     (P)  keyboard-first batch entry + paste box + duplicate warning
       settings_dialog.py      (P)  timeouts, backup folder, keep-N, columns
-      generator_dialog.py     (P)  password generator UI
+      generator_dialog.py          password generator (copy or "use" into the form)
       messages.py                  generic error texts (error_text) + confirm/error boxes
       widgets/
         account_table.py           table model (passwords masked, extra columns, never secret) + proxy
@@ -220,13 +225,14 @@ vaultkeeper/                       repo root
     test_demo.py                   demo stays in temp, fake data only, cleaned up (even with open logs)
     test_templates.py              templates: presets, codec, validation, extra values, secret search
     test_migrations.py             schema v1 -> v2 (incl. a real encrypted v1 vault)
-    test_backup.py, test_exporter.py, test_clipboard.py, test_autolock.py              (P)
-    test_generator.py, test_entry_session.py, test_paste_assist.py, test_totp.py      (P)
+    test_backup.py, test_exporter.py, test_clipboard.py, test_autolock.py, test_generator.py
+    test_entry_session.py, test_paste_assist.py, test_totp.py                          (P)
     ui/                            pytest-qt: test_qt_adapters, test_unlock_dialog (never-silent
                                    backup, no freeze, closable while busy), test_create_vault_dialog,
                                    test_change_password_dialog, test_main_window (real demo vault),
                                    test_account_dialog, test_game_setup, test_pickers,
-                                   test_shell (welcome, controller lock/demo details)
+                                   test_shell (welcome, controller lock/demo details),
+                                   test_phase5_ui (copy, auto-lock, generator, backups, export)
 ```
 
 ---
@@ -429,6 +435,17 @@ python -m vaultkeeper  # run the app
   modal box left open at teardown crashes Qt.
 - Delete key only deletes while the account table has focus. Edit has no keyboard shortcut
   (rows open on double-click/Enter in 4c) so Enter in text fields is never hijacked.
+- Copy shortcuts follow KeePass (Ctrl+B username, Ctrl+C password) plus Ctrl+E email; they
+  only act while the table has focus. Status messages name what was copied, never the value.
+  Copies carry the Windows formats that exclude them from Clipboard History/cloud sync.
+- Auto-lock: inactivity (default 5 min), minimize, Windows session lock (WTS notification).
+  Locking clears our clipboard copy and backs up if anything changed.
+- Backups are byte copies of the encrypted vault (same master password), named
+  `<vault>-backup-YYYYMMDD-HHMMSS.vault`; rotation only touches this vault's backups. A
+  "backups are off" banner shows until a folder is chosen. Demo backups stay in the demo folder.
+- A cancelled export writes nothing (checked after the KDF, before writing).
+- UI tests: `QApplication.quit` is a no-op (`tests/ui_support.py`); a controller quitting
+  at teardown used to stop event delivery for later tests.
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
   logs), deleted on exit; leftovers are swept at the next demo start. Real settings untouched.
 
@@ -443,7 +460,7 @@ python -m vaultkeeper  # run the app
   - [x] 4b: full main window (sidebar, search, table, lock, change master password)
   - [x] 4c: account dialog, game manager
   - [x] 4d: per-game templates (custom ranks/regions/fields/extra fields), Game setup, schema v2
-- [ ] Phase 5: Clipboard, auto-lock, generator, export, backups
+- [x] Phase 5: Clipboard, auto-lock, generator, export, backups
 - [ ] Phase 6: Quick Add, batch mode, paste assist
 - [ ] Phase 7: TOTP
 - [ ] Phase 8: Polish + packaging

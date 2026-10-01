@@ -3,8 +3,8 @@
 A local-only, offline desktop password manager built around game accounts (Valorant, Marvel
 Rivals, Overwatch and more). Everything is stored in one encrypted vault file on your PC.
 
-> **Status:** in development (Phase 4 of 8 done). Usable for trying out with `--demo`.
-> **Do not enter real accounts until backups work (end of Phase 5).**
+> **Status:** in development (Phase 5 of 8 done). Backups work: set a backup folder
+> (File -> Backups...) before entering real accounts.
 
 ## Install and run (Windows)
 

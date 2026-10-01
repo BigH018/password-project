@@ -58,8 +58,9 @@ def run(argv: list[str] | None = None) -> int:
     install_exception_hooks(logger)
     settings_file = settings_path(data_dir)
     settings = load_settings(settings_file)
-    if demo_env is not None:
-        settings = update_settings(settings, vault_path=str(demo_env.vault_path))
+    if demo_env is not None:  # demo backups go inside the demo folder too
+        settings = update_settings(settings, vault_path=str(demo_env.vault_path),
+                                   backup_dir=str(demo_env.root / "backups"))
 
     app = QApplication(sys.argv[:1])
     app.setApplicationName(APP_NAME)
