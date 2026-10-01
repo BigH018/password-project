@@ -108,6 +108,8 @@ Turns one pasted block into suggestions for the selected game. It never saves.
   `recovery:`, `riot id:`/`ign:`/`name:`, `tag:`, `region:`, `rank:`, `status:`,
   `notes:`, and any extra field's label.
 - Values of login/password lines are never scanned by the other rules.
+- Password, email password and secret extra-field values are kept exactly as pasted (no
+  Unicode normalization, like every secret). Labels and all other values are NFC-normalized.
 - Unlabeled text: first `@` token -> email (a second -> recovery email); `name#tag`
   (no spaces; use `ign:` for names with spaces); a tier from the game's ladder or a known
   short form, plus a valid division; a region of the game (codes like EU/NA map to the

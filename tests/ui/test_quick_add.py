@@ -182,3 +182,14 @@ def test_main_window_quick_add_uses_longer_autolock(qtbot: Any, tmp_path: Any,
     controller.window.quick_add_action.trigger()
     assert timeouts == [15 * 60]  # longer while Quick Add is open
     assert controller.guard.tracker.timeout == 5 * 60  # back to normal afterwards
+
+
+def test_pasted_password_reaches_the_form_unchanged(qtbot: Any, accounts: AccountService,
+                                                    games: list[Game]) -> None:
+    decomposed = "Fake-Pa" + "e" + chr(0x301) + "ssw0rd-1!"  # combining accent, not NFC
+    dialog = _open(qtbot, accounts, games, EntrySession(), default_game_id=games[0].id)
+    dialog.paste_box.setPlainText(f"user: fake_login_nfc\npass: {decomposed}")
+    dialog.fill_from_paste()
+    assert dialog.form.password.text() == decomposed
+    dialog.save_button.click()
+    assert accounts.list_all()[0].password == decomposed

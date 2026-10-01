@@ -131,3 +131,29 @@ def test_describe_never_includes_values() -> None:
     text = " ".join(s.describe())
     assert "password" in text and "email" in text
     assert "Fake-Passw0rd-1!" not in text and "a@example.test" not in text
+
+
+# --- SEC-Low2: secrets are kept exactly as pasted (no NFC) ----------------------------------
+DECOMPOSED = "Fake-Pa" + "e" + chr(0x301) + "ssw0rd-1!"  # "e" + combining acute accent
+COMPOSED = "Fake-Pa" + chr(0xE9) + "ssw0rd-1!"
+
+
+def test_pasted_password_is_not_normalized() -> None:
+    found = suggest(f"user: fake_login_1\npass: {DECOMPOSED}\nemail pass: {DECOMPOSED}", VAL)
+    assert found.fields["password"] == DECOMPOSED != COMPOSED
+    assert found.fields["email_password"] == DECOMPOSED
+
+
+def test_pasted_secret_extra_field_is_not_normalized() -> None:
+    pin = CustomField(id=new_id(), label="Pin", kind=FieldKind.SECRET)
+    note = CustomField(id=new_id(), label="Platform", kind=FieldKind.TEXT)
+    template = GameTemplate(custom_fields=(pin, note))
+    found = suggest(f"Pin: {DECOMPOSED}\nPlatform: {DECOMPOSED}", template)
+    assert found.extra[pin.id] == DECOMPOSED
+    assert found.extra[note.id] == COMPOSED  # non-secret text is still normalized
+
+
+def test_non_secret_values_are_still_normalized() -> None:
+    name = "Cafe" + chr(0x301)
+    found = suggest(f"riot id: {name}#TEST\n{name.lower()}x#AB", VAL)
+    assert found.fields["display_name"] == "Caf" + chr(0xE9)

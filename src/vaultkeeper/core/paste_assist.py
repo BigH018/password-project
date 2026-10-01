@@ -10,7 +10,9 @@ Rules, deliberately simple and predictable:
    game's ladder (optionally followed by a division) -> rank; a region from the game's list ->
    region; the word "banned" -> status banned + a note.
 
-Input is size-limited and cleaned of control characters. Nothing here is logged.
+Input is size-limited and cleaned of control characters. Secret values (passwords, secret
+extra fields) are kept exactly as pasted; everything else is NFC-normalized. Nothing here
+is logged.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from vaultkeeper.config.constants import GamePreset
-from vaultkeeper.core.game_template import GameTemplate
+from vaultkeeper.core.game_template import FieldKind, GameTemplate
 from vaultkeeper.core.models import Rank
 from vaultkeeper.core.text_validation import _BIDI_CONTROLS
 
@@ -41,6 +43,7 @@ _LABELS: dict[str, str] = {
     "rank": "rank", "elo": "rank", "status": "status", "notes": "notes", "note": "notes",
 }  # fmt: skip
 _SECRET_TARGETS = {"login_username", "password", "email_password"}  # values not re-scanned
+_RAW_TARGETS = {"password", "email_password"}  # stored exactly as pasted (never normalized)
 
 # Short forms people write in notes. Used only if the full name is in the game's ladder.
 _TIER_ALIASES = {
@@ -89,9 +92,16 @@ class PasteSuggestions:
 
 
 def _clean(text: str) -> str:
-    text = unicodedata.normalize("NFC", text[:MAX_PASTE]).replace("\r\n", "\n").replace("\r", "\n")
+    """Limit size, unify newlines, drop control characters. NOT normalized (see ``_nfc``)."""
+    text = text[:MAX_PASTE].replace("\r\n", "\n").replace("\r", "\n")
     return "".join(ch for ch in text if ch in "\n\t" or (
         unicodedata.category(ch) != "Cc" and ch not in _BIDI_CONTROLS and ch != _BOM))
+
+
+def _nfc(text: str) -> str:
+    """NFC for matching and plain-text values. Never applied to secrets: a pasted password
+    must be stored exactly as pasted, or it may not match the real one."""
+    return unicodedata.normalize("NFC", text)
 
 
 def _tier_lookup(preset: GamePreset) -> dict[str, str]:
@@ -168,25 +178,28 @@ def suggest(text: str, template: GameTemplate) -> PasteSuggestions:
     """Suggestions for one pasted account block. The caller decides what to apply."""
     result = PasteSuggestions()
     preset = template.to_preset()
-    extra_by_label = {f.label.casefold(): f for f in template.custom_fields}
+    extra_by_label = {_nfc(f.label).casefold(): f for f in template.custom_fields}
     free: list[str] = []  # unlabeled text, plus values of non-secret labeled lines
     for line in _clean(text).split("\n"):
         if not line.strip():
             continue
         match = _LABEL_LINE.match(line)
-        label = match.group(1).strip().casefold() if match else ""
-        value = match.group(2).strip() if match else ""
+        label = _nfc(match.group(1)).strip().casefold() if match else ""
+        raw = match.group(2).strip() if match else ""
         if match and label in _LABELS:
             target = _LABELS[label]
+            value = raw if target in _RAW_TARGETS else _nfc(raw)
             if value:
                 _apply_label(target, value, result, preset)
             if target not in _SECRET_TARGETS:
                 free.append(value)
         elif match and label in extra_by_label:
-            if value:
-                result.extra.setdefault(extra_by_label[label].id, value)
+            custom = extra_by_label[label]
+            if raw:
+                keep_raw = custom.kind is FieldKind.SECRET
+                result.extra.setdefault(custom.id, raw if keep_raw else _nfc(raw))
         else:
-            free.append(line)
+            free.append(_nfc(line))
     _scan_free_text("\n".join(free), result, preset)
     return result
 
