@@ -36,7 +36,7 @@ _BASE32_RE = re.compile(r"^[A-Z2-7]+=*$")
 
 def clean_display_name(value: Any) -> str:
     """In-game name. Must not contain '#' (the tag has its own field)."""
-    text = clean_text(value, "display_name", c.MAX_DISPLAY_NAME)
+    text = clean_text(value, "display_name", c.MAX_DISPLAY_NAME, identity=True)
     if "#" in text:
         raise ValidationError("display_name", "must not contain '#'; put the tag in the tag field")
     return text
@@ -44,7 +44,7 @@ def clean_display_name(value: Any) -> str:
 
 def clean_tag(value: Any) -> str | None:
     """Tag after '#'. A leading '#' is removed. No spaces or further '#'."""
-    text = clean_optional_text(value, "tag", c.MAX_TAG + 1)
+    text = clean_optional_text(value, "tag", c.MAX_TAG + 1, identity=True)
     if text is None:
         return None
     text = text.removeprefix("#")
@@ -158,7 +158,7 @@ def clean_totp_secret(value: Any) -> str | None:
 
 def clean_game_name(value: Any) -> str:
     """Game name: required, single line."""
-    return clean_text(value, "game_name", c.MAX_GAME_NAME, required=True)
+    return clean_text(value, "game_name", c.MAX_GAME_NAME, required=True, identity=True)
 
 
 def clean_preset_key(value: Any) -> str:
@@ -197,7 +197,8 @@ def validate_account(
         game_id=clean_uuid(account.game_id, "game_id"),
         display_name=clean_display_name(name),
         tag=clean_tag(tag),
-        login_username=clean_text(account.login_username, "login_username", c.MAX_LOGIN),
+        login_username=clean_text(account.login_username, "login_username", c.MAX_LOGIN,
+                                  identity=True),
         password=clean_secret(account.password, "password"),
         email=clean_email(account.email, "email"),
         email_password=clean_optional_secret(account.email_password, "email_password"),

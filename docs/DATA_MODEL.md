@@ -38,6 +38,11 @@ Account-level rules (`validate_account`):
 
 Length limits live in `config/constants.py` and `core/game_template.py`. Character rules live
 in `core/text_validation.py` (control characters are rejected, except newlines in notes).
+Identity fields (in-game name, tag, login, emails, email login URL, game name) also reject
+invisible format characters (Unicode Cf: zero-width space/joiner, LRM/RLM, soft hyphen, tag
+characters), so two values that look the same are the same. Notes and labels allow them
+(emoji sequences use ZWJ); secrets are never altered. Paste assist drops them from the
+identity values it suggests.
 
 ## Rank
 

@@ -169,3 +169,48 @@ def test_validate_account_splits_name_and_tag() -> None:
     assert (cleaned.display_name, cleaned.tag) == ("FakePlayer", "TEST")
     with pytest.raises(ValidationError):  # both filled in: still the user's call
         v.validate_account(replace(account, tag="EUW"), game.template)
+
+
+# --- SEC-Low3: no invisible format characters (Unicode Cf) in identity fields -------------
+INVISIBLE = {
+    "LRM": chr(0x200E), "RLM": chr(0x200F), "ZWSP": chr(0x200B), "ZWNJ": chr(0x200C),
+    "ZWJ": chr(0x200D), "word joiner": chr(0x2060), "soft hyphen": chr(0xAD),
+    "tag A": chr(0xE0041), "tag cancel": chr(0xE007F),
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("char", INVISIBLE.values(), ids=INVISIBLE.keys())
+def test_identity_fields_reject_invisible_characters(char: str) -> None:
+    game = make_game()
+    base = make_account(game)
+    cases = {
+        "display_name": replace(base, display_name=f"Fake{char}Player"),
+        "tag": replace(base, tag=f"TE{char}ST"),
+        "login_username": replace(base, login_username=f"fake{char}login"),
+        "email": replace(base, email=f"fake{char}@example.test"),
+        "recovery_email": replace(base, recovery_email=f"backup{char}@example.test"),
+        "email_login_url": replace(base, email_login_url=f"https://mail.exam{char}ple.test/"),
+    }
+    for field, account in cases.items():
+        with pytest.raises(ValidationError) as info:
+            v.validate_account(account, game.template)
+        assert info.value.field == field
+        assert "invisible" in info.value.reason
+    with pytest.raises(ValidationError):
+        v.clean_game_name(f"Valo{char}rant")
+
+
+def test_notes_and_labels_keep_emoji_sequences() -> None:
+    family = chr(0x1F468) + chr(0x200D) + chr(0x1F469)  # emoji joined with ZWJ
+    game = make_game()
+    account = replace(make_account(game), notes=f"main {family}", tags=(f"fam {family}",))
+    cleaned = v.validate_account(account, game.template)
+    assert family in cleaned.notes and family in cleaned.tags[0]
+
+
+def test_secrets_are_still_never_altered() -> None:
+    game = make_game()
+    secret = "Fake" + chr(0x200B) + "Passw0rd-1!"
+    cleaned = v.validate_account(replace(make_account(game), password=secret), game.template)
+    assert cleaned.password == secret
+

@@ -157,3 +157,18 @@ def test_non_secret_values_are_still_normalized() -> None:
     name = "Cafe" + chr(0x301)
     found = suggest(f"riot id: {name}#TEST\n{name.lower()}x#AB", VAL)
     assert found.fields["display_name"] == "Caf" + chr(0xE9)
+
+
+# --- SEC-Low3: identity values copied from web pages lose invisible characters ------------
+
+
+def test_paste_drops_invisible_characters_from_identity_values() -> None:
+    zwsp, shy = chr(0x200B), chr(0xAD)
+    pw = "Fake" + zwsp + "Pass-1!"
+    found = suggest(f"user: fake{zwsp}_login\npass: {pw}\nemail: alt{shy}7@example.test\n"
+                    f"riot id: Fake{zwsp}Alt#TE{shy}ST", VAL)
+    assert found.fields["login_username"] == "fake_login"
+    assert found.fields["email"] == "alt7@example.test"
+    assert (found.fields["display_name"], found.fields["tag"]) == ("FakeAlt", "TEST")
+    assert found.fields["password"] == pw  # secrets: exactly as pasted
+

@@ -153,7 +153,8 @@ vaultkeeper/                       repo root
       template_validation.py       clean_template (Game setup) + clean_extra (extra field values)
       migrations.py                migrate_v1_to_v2 (preset key -> template, accounts get extra)
       serialization.py             VaultData <-> JSON dict, structure validation, runs migrations
-      text_validation.py           generic text/secret/email/URL/uuid checks (clean_* helpers)
+      text_validation.py           generic text/secret/email/URL/uuid checks (clean_* helpers;
+                                   identity=True rejects Unicode Cf), strip_format_characters
       validation.py                field rules (names, tags, labels, presets, ranks, TOTP) + validate_account;
                                    split_name_and_tag (name#tag typed in the name, tag empty)
       store.py                     VaultStore protocol + apply_change (save or roll back in memory)
@@ -255,6 +256,7 @@ vaultkeeper/                       repo root
     test_models.py                 model invariants, repr hides secrets
     test_serialization.py          round trip, schema version, malformed input
     test_text_validation.py        limits, control/bidi chars, secrets untouched, email, URL
+                                   (Cf in identity fields: tests/test_validation.py)
     test_validation.py             field rules, presets, ranks, whole-account validation
     test_constants.py              preset consistency (divisions, tiers, regions)
     test_settings.py               load/save, defaults, corrupt file handling, paths, geometry,
@@ -484,6 +486,9 @@ python -m vaultkeeper  # run the app
 - Rank division is optional (a tier can be stored without one). Loading a vault checks
   structure only, not presets, so preset changes never stop an old vault from opening.
 - An account needs at least one identifier: login username, in-game name or email.
+- Identity fields (name, tag, login, emails, email URL, game name) reject Unicode Cf
+  (SEC-Low3). ZWJ is NOT allowed there (user told 2026-10-01): no game needs multi-part emoji
+  in names, and it would let look-alike duplicates through. Notes and labels allow Cf.
 - `name#tag` typed into the name with the tag empty is split (CR-M3): in core on save, and
   in the form on focus-out. If the tag is filled in too, the name's '#' is still an error.
 - `pyproject.toml` reads dependencies from `requirements.txt` (single source of pins).
@@ -638,7 +643,7 @@ Group 3 (done, pushed): entry workflow and lock rule
 Group 4 (in progress): input and key-derivation hardening
 - [x] 14 SEC-Low1 password_policy: NFC first, strip surrounding whitespace and Unicode Cf
       before length/common-list checks (tests: decomposed chars, trailing space, ZWSP)
-- [ ] 15 SEC-Low3 reject Unicode Cf in names, logins, identity fields (ZWJ only if needed
+- [x] 15 SEC-Low3 reject Unicode Cf in names, logins, identity fields (ZWJ only if needed
       for emoji: tell the user); tests for LRM, RLM, ZWSP, word joiner, soft hyphen, tag chars
 - [ ] 16 SEC-Low4/5 Argon2 HashingError (e.g. low memory) -> clear VaultKeeperError; lone
       surrogates (UnicodeEncodeError) in kdf.py -> VaultAuthError without echoing the char

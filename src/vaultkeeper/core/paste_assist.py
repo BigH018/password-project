@@ -25,7 +25,7 @@ from typing import Any
 from vaultkeeper.config.constants import GamePreset
 from vaultkeeper.core.game_template import FieldKind, GameTemplate
 from vaultkeeper.core.models import Rank
-from vaultkeeper.core.text_validation import _BIDI_CONTROLS
+from vaultkeeper.core.text_validation import _BIDI_CONTROLS, strip_format_characters
 
 MAX_PASTE = 5000
 _BOM = chr(0xFEFF)  # byte-order mark (invisible); chr() keeps this file ASCII-only
@@ -44,6 +44,9 @@ _LABELS: dict[str, str] = {
 }  # fmt: skip
 _SECRET_TARGETS = {"login_username", "password", "email_password"}  # values not re-scanned
 _RAW_TARGETS = {"password", "email_password"}  # stored exactly as pasted (never normalized)
+# Copied from web pages these often carry soft hyphens or zero-width spaces, which the
+# account rules reject in identity fields: drop them from the suggestions.
+_IDENTITY_FIELDS = ("login_username", "email", "recovery_email", "display_name", "tag")
 
 # Short forms people write in notes. Used only if the full name is in the game's ladder.
 _TIER_ALIASES = {
@@ -201,6 +204,9 @@ def suggest(text: str, template: GameTemplate) -> PasteSuggestions:
         else:
             free.append(_nfc(line))
     _scan_free_text("\n".join(free), result, preset)
+    for key in _IDENTITY_FIELDS:
+        if isinstance(result.fields.get(key), str):
+            result.fields[key] = strip_format_characters(result.fields[key])
     return result
 
 
