@@ -36,3 +36,13 @@ def test_counter_counts_every_save() -> None:
     for n in range(43):
         session.remember(make_account(game, n=n))
     assert session.counter_text() == "43 added this session"
+
+
+def test_starting_game_prefers_the_selected_game() -> None:
+    session = EntrySession()
+    assert session.starting_game_id(None) is None
+    assert session.starting_game_id("selected-game") == "selected-game"
+    session.remember(make_account(make_game("Overwatch", "overwatch")))
+    batch_game = session.game_id
+    assert session.starting_game_id(None) == batch_game  # "All games": last batch game
+    assert session.starting_game_id("selected-game") == "selected-game"  # a game is selected

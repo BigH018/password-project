@@ -27,6 +27,11 @@ class EntrySession:
         self.status = saved.status
         self.added += 1
 
+    def starting_game_id(self, selected: str | None) -> str | None:
+        """The game Quick Add opens on: the game selected in the sidebar if there is one,
+        otherwise the game of the last batch (None: the user picks)."""
+        return selected or self.game_id
+
     def next_draft(self, blank: Account) -> Account:
         """Fill a blank draft (fresh id, chosen game) with the sticky values.
 

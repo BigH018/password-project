@@ -196,3 +196,23 @@ def test_pasted_password_reaches_the_form_unchanged(qtbot: Any, accounts: Accoun
     assert dialog.form.password.text() == decomposed
     dialog.save_button.click()
     assert accounts.list_all()[0].password == decomposed
+
+
+def test_opens_on_the_selected_game_not_the_last_batch_game(qtbot: Any, accounts: AccountService,
+                                                            games: list[Game]) -> None:
+    val, ow = games
+    session = EntrySession()
+    first = _open(qtbot, accounts, games, session, default_game_id=ow.id)
+    first.form.login.setText("fake_ow_login")
+    first.form.region.set_region("Europe")
+    first.save_button.click()
+    first.close()
+
+    on_val = _open(qtbot, accounts, games, session, default_game_id=val.id)  # sidebar: Valorant
+    assert on_val.form.game.currentData() == val.id
+    assert on_val.form.region.region() is None  # Overwatch's region doesn't carry over
+    on_val.close()
+
+    all_games = _open(qtbot, accounts, games, session)  # sidebar: "All games"
+    assert all_games.form.game.currentData() == ow.id  # the last batch game
+    assert all_games.form.region.region() == "Europe"

@@ -173,7 +173,8 @@ vaultkeeper/                       repo root
                                    prepare (UI thread) / run_backup_job (worker) / finish;
                                    after a password change: back up now, find old-password backups (salt)
       exporter.py                  encrypted export (own password, file kind EXPORT, .vault)
-      entry_session.py             Quick Add batch state: sticky game/region/status + counter
+      entry_session.py             Quick Add batch state: sticky game/region/status + counter,
+                                   starting_game_id (sidebar game first, else last batch game)
       paste_assist.py              paste block -> field suggestions (pure, never saves)
       generator.py                 password generator (secrets only)
     crypto/
@@ -581,6 +582,8 @@ python -m vaultkeeper  # run the app
   at once); Cancel restores the previous values exactly.
 - UI tests: `QApplication.quit` is a no-op (`tests/ui_support.py`); a controller quitting
   at teardown used to stop event delivery for later tests.
+- Quick Add opens on the game selected in the sidebar; with "All games" it opens on the last
+  batch game (`EntrySession.starting_game_id`).
 - Quick Add (Ctrl+Shift+N): Enter saves and starts a fresh form (Ctrl+Enter also works in
   Notes/paste box); Esc closes (asks if anything is typed). Game, region and status stick
   between entries; the "N added this session" counter resets on lock. While it's open the
@@ -725,7 +728,7 @@ Group 6 (in progress): cleanup (one commit each)
       user: kdf_needs_upgrade unused by the UI (upgrade prompt proposed, not built); pyotp
       unused (removal awaits the user's OK).
 - [x] 27 make `_BIDI_CONTROLS` public (now `BIDI_CONTROLS`), update importers
-- [ ] 28 Quick Add opens on the sidebar's selected game, else the last batch game
+- [x] 28 Quick Add opens on the sidebar's selected game, else the last batch game
 - [ ] 29 cache the template-to-preset conversion in account_table.py
 - [ ] 30 split tests/test_vault_service.py and tests/ui/test_phase5_ui.py under ~300 lines;
       also split `ui/app_controller.py` (394 lines: move backup/export wiring out),

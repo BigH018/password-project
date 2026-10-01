@@ -41,7 +41,7 @@ class QuickAddDialog(AccountDialog):
     def __init__(self, accounts: AccountService, games: list[Game], session: EntrySession,
                  default_game_id: str | None = None, parent: QWidget | None = None) -> None:
         self._session = session
-        game_id = session.game_id or default_game_id
+        game_id = session.starting_game_id(default_game_id)
         draft = session.next_draft(accounts.new_draft(game_id)) if game_id else None
         super().__init__(accounts, games, default_game_id=game_id, parent=parent, draft=draft)
         self.setWindowTitle("Quick Add")
