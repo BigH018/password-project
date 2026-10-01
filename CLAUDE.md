@@ -97,8 +97,9 @@ scripts/recover_vault.py is standalone: it must NOT import vaultkeeper.
    notification) live in `ui/qt_adapters.py` and are injected through small Protocols.
 3. `crypto` and `storage` deal in bytes and headers. They know nothing about accounts or games.
 4. `ui` holds NO business or crypto logic. If a UI file decides a business rule, move it to `core`.
-5. Slow work (Argon2) runs through an **injected executor**. Core stays synchronous and
-   headless, and the UI supplies a worker thread so dialogs never freeze.
+5. Slow work (Argon2) runs through an injected `TaskRunner` (`core/vault_service.py`):
+   a pure *prepare* step runs on the runner, and the *commit* step updates state on the UI
+   thread. Tests use `InlineTaskRunner`. The UI supplies a Qt worker in `ui/qt_adapters.py`.
 6. Constructor injection for collaborators (clock, executor, paths, KDF params, clipboard
    backend, scheduler). No module-level singletons holding state.
 
@@ -116,7 +117,7 @@ vaultkeeper/                       repo root
     VAULT_FORMAT.md                byte layout, KDF defaults + rationale, bounds, atomic save
     DATA_MODEL.md                  Account/Game/Rank fields, presets, duplicate rule
   scripts/
-    recover_vault.py          (P)  standalone decrypt-to-stdout (cryptography + argon2-cffi only)
+    recover_vault.py               standalone decrypt-to-stdout (cryptography + argon2-cffi only)
   packaging/
     vaultkeeper.spec          (P)  PyInstaller spec (phase 8)
   src/vaultkeeper/
@@ -134,8 +135,8 @@ vaultkeeper/                       repo root
       models.py                    dataclasses: Account, Game, Rank, VaultData (no I/O)
       serialization.py             VaultData <-> JSON dict, schema validation, migrations
       validation.py                input validation/normalization (~280 lines: split before growing)
-      password_policy.py      (P)  master password rules (min 12) + strength hint
-      vault_service.py        (P)  create/unlock/lock/save/change password (injected executor)
+      password_policy.py           master password rules (min 12) + strength hint
+      vault_service.py             create/unlock/lock/save/change password, TaskRunner (~285 lines)
       account_service.py      (P)  account CRUD + duplicate detection
       game_service.py         (P)  add/rename/delete games (delete blocked if accounts exist)
       search.py               (P)  filter/query engine
@@ -146,12 +147,12 @@ vaultkeeper/                       repo root
       generator.py            (P)  password generator (secrets only)
       totp.py                 (P)  TOTP code + seconds remaining
     crypto/
-      kdf.py                  (P)  Argon2id derivation + param bounds
-      cipher.py               (P)  AES-256-GCM via cryptography's AESGCM
-      header.py               (P)  header dataclass, pack/unpack, version checks
-      envelope.py             (P)  seal/open: header (as AAD) + nonce + ciphertext
+      kdf.py                       Argon2id derivation + param bounds
+      cipher.py                    AES-256-GCM via cryptography's AESGCM
+      header.py                    header dataclass, pack/unpack, version checks
+      envelope.py                  seal/open: header (as AAD) + nonce + ciphertext
     storage/
-      vault_file.py           (P)  atomic write with verify-before-replace, .bak retention
+      vault_file.py                atomic write with verify-before-replace, .bak retention
     security/
       clipboard.py            (P)  ClipboardGuard: copy + auto-clear if unchanged
       autolock.py             (P)  inactivity logic, Quick Add timeout override (injected clock)
@@ -187,8 +188,8 @@ vaultkeeper/                       repo root
     test_constants.py              preset consistency (divisions, tiers, regions)
     test_settings.py               load/save, defaults, corrupt file handling, paths
     test_logging_setup.py          redaction, exceptions logged without messages
-    test_header.py, test_kdf.py, test_cipher.py, test_envelope.py, test_vault_file.py  (P)
-    test_vault_service.py, test_password_policy.py, test_recover_script.py            (P)
+    test_header.py, test_kdf.py, test_cipher.py, test_envelope.py, test_vault_file.py
+    test_vault_service.py, test_password_policy.py, test_recover_script.py
     test_accounts.py, test_games.py, test_search.py                                    (P)
     test_backup.py, test_exporter.py, test_clipboard.py, test_autolock.py              (P)
     test_generator.py, test_entry_session.py, test_paste_assist.py, test_totp.py      (P)
@@ -219,6 +220,9 @@ vaultkeeper/                       repo root
 - No bare `except:`, no silent swallowing.
 - **NEVER open, read, request or paste real credential files** (§2).
 - No AI/Claude attribution lines in commits or PRs. Plain commit messages.
+- No raw non-ASCII or control characters in `.py` files: write `\u00e9`-style escapes
+  (enforced by `test_architecture.py`; blocks invisible bidi "Trojan Source" characters).
+  The file-writing tool may turn escapes into real characters, so run the tests after writing.
 
 ---
 
@@ -249,7 +253,8 @@ vaultkeeper/                       repo root
 ## 7. Vault format (summary → `docs/VAULT_FORMAT.md`)
 Binary header (magic `VKVAULT\0`, format version, file kind vault/export, Argon2id params,
 salt, cipher id, nonce, ciphertext length) + AES-256-GCM ciphertext of a UTF-8 JSON payload
-with `schema_version`. KDF defaults t=3, m=256 MiB, p=4. Any format change must update
+with `schema_version`. Key = Argon2id over the NFC-normalized UTF-8 password. KDF defaults
+t=4, m=512 MiB, p=4 (about 0.3 s on the dev PC; target under ~1 s on a modest PC). Any format change must update
 `docs/VAULT_FORMAT.md`, `scripts/recover_vault.py` and `tests/test_recover_script.py` together.
 
 ## 8. Data model (summary → `docs/DATA_MODEL.md`)
@@ -326,7 +331,8 @@ python -m vaultkeeper  # run the app
 1. Scaffold, config (constants with verified rank presets, settings, paths, logging), errors, models, serialization, validation.
 2. Crypto + storage + vault service (+ password policy, recovery script), with thorough tests.
 3. Account + game services, search/filter, duplicate detection.
-4. PyQt5 UI: create/unlock (KDF off the UI thread), main window, account dialog, game grouping, search.
+4. PyQt5 UI: create/unlock (KDF off the UI thread; damaged vault → OFFER `.bak`, never silent,
+   with a pytest-qt test), main window, account dialog, game grouping, search.
 5. Clipboard auto-clear, auto-lock (+ session lock), password generator, **encrypted export and rotating backups**.
 6. Quick Add, batch mode, paste assist.
 7. TOTP (optional field).
@@ -339,9 +345,11 @@ python -m vaultkeeper  # run the app
 ### Decisions (approved)
 - Repo root is the project root. Package in `src/vaultkeeper`. File extension `.vault`. The
   location is chosen at vault creation.
-- AES-256-GCM. Argon2id t=3 / 256 MiB / p=4. Header bounds: t ≤ 10, m ≤ 1 GiB.
-- Per-game presets (Valorant, Marvel Rivals, Overwatch, custom), verified against current
-  sources in Phase 1.
+- AES-256-GCM. Argon2id t=4 / 512 MiB / p=4, chosen so unlock stays under ~1 s on a modest PC
+  (about 0.3 s measured on the dev PC). Header bounds t ≤ 10, m ≤ 1 GiB leave room to raise it.
+- Per-game presets (Valorant, Marvel Rivals, Overwatch), verified against current sources,
+  with the source and date in `constants.py`. Anything unverifiable is marked UNVERIFIED there
+  (currently: Marvel Rivals regions). The custom preset has free-text rank and region.
 - Riot ID = name + optional tag. Login URL is copy-only (no "open in browser").
 - Deleting a game with accounts is blocked. Export uses a separate password (import later).
 - Backups: after a save (max one per 10 min) plus on lock/exit if changed. Keep the last 10.
@@ -356,11 +364,13 @@ python -m vaultkeeper  # run the app
   structure only, not presets, so preset changes never stop an old vault from opening.
 - An account needs at least one identifier: login username, in-game name or email.
 - `pyproject.toml` reads dependencies from `requirements.txt` (single source of pins).
+- The master password is NFC-normalized before the KDF (the app and the recovery script agree).
+- Master password policy: ≥12 chars, ≥5 distinct chars, not on a small common-password list.
 
 ### Status
 - [x] Step 0: CLAUDE.md + plan approved
-- [x] Phase 1: Scaffold, config, models (awaiting review)
-- [ ] Phase 2: Crypto, storage, vault service, recovery script
+- [x] Phase 1: Scaffold, config, models
+- [x] Phase 2: Crypto, storage, vault service, recovery script
 - [ ] Phase 3: Account/game services, search
 - [ ] Phase 4: Core UI
 - [ ] Phase 5: Clipboard, auto-lock, generator, export, backups

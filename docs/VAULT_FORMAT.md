@@ -25,11 +25,27 @@ All integers are **big-endian** and unsigned. The file is `header || ciphertext_
 | 56     | n    | ciphertext+tag  | AES-GCM output (16-byte tag appended)           |
 
 - **AAD** = bytes `[0:56]` (the whole header). Any header change → `InvalidTag` → `VaultAuthError`.
-- **Key** = Argon2id(password as UTF-8, salt, params) → 32 bytes, via
-  `argon2.low_level.hash_secret_raw(type=Type.ID)`. It's derived once at unlock and kept as a
-  `bytearray` only while unlocked. The salt stays the same between saves and changes on
-  password change. The nonce changes on every save.
+- **Key**: see "Key derivation" below. It's derived once at unlock and kept as a `bytearray`
+  only while unlocked. The salt stays the same between saves and changes on password change.
+  The nonce changes on every save.
 - An export (`file_kind=2`) uses the same layout, with its own password, salt and key.
+
+## Key derivation (normative: every implementation must match exactly)
+
+1. Take the master password as a Unicode string.
+2. Normalize it to **Unicode NFC** (`unicodedata.normalize("NFC", password)`). No other
+   changes: no trimming, no case folding.
+3. Encode it as **UTF-8** bytes.
+4. Run **Argon2id v1.3** with the header's salt, `time_cost`, `memory_kib` and `parallelism`,
+   output length **32 bytes**. In Python: `argon2.low_level.hash_secret_raw(..., type=Type.ID)`.
+5. Use those 32 bytes as the AES-256-GCM key.
+
+NFC exists because the same visible password (e.g. `é`) can be typed as one code point or as
+`e` plus a combining accent, depending on keyboard or IME. Without normalization the two would
+derive different keys and the vault wouldn't open. `crypto/kdf.py` and
+`scripts/recover_vault.py` both do this. Tests with an accented master password, created with
+one form and opened with the other, cover the app (`test_vault_service.py`, `test_kdf.py`) and
+the script (`test_recover_script.py`).
 
 ## Bounds (checked before the KDF runs)
 
@@ -65,13 +81,16 @@ newer versions. Migrations live in `core/serialization.py` as `migrate_vN_to_vN+
 
 ## KDF defaults and rationale
 
-`time_cost=3`, `memory_kib=262144` (256 MiB), `parallelism=4`, 32-byte output.
+`time_cost=4`, `memory_kib=524288` (512 MiB), `parallelism=4`, 32-byte output.
 - RFC 9106's low-memory recommendation is t=3, 64 MiB, p=4. OWASP's minimum is far lower
-  (19 MiB). We use 4× the RFC memory because this desktop app unlocks a few times a day on a
-  machine with plenty of RAM. Each offline guess against a stolen vault costs much more, and
-  unlock still takes around 0.5–1 s.
-- Params are stored per file, so they can be raised later without breaking old vaults.
-- Argon2 runs through an injected executor (a worker thread in the UI), never on the UI thread.
+  (19 MiB). We use 8× the RFC memory and one more pass because this desktop app unlocks a few
+  times a day on a machine with plenty of RAM, so each offline guess against a stolen vault
+  costs much more.
+- **Chosen so unlock stays under about 1 s on a modest PC.** Measured on the dev PC
+  (2026-10-01): about 0.3 s for the KDF (the previous 256 MiB / t=3 took 0.10 s).
+- The bounds (1 GiB, t ≤ 10) leave room to raise the defaults later. Params are stored per
+  file, so old vaults keep working, and they pick up new defaults on the next password change.
+- Argon2 runs through the injected `TaskRunner` (a worker thread in the UI), never on the UI thread.
 - Tests inject tiny params (t=1, 8 MiB). One `@pytest.mark.slow` test uses the defaults.
 
 ## Atomic save procedure (`storage/vault_file.py`)
@@ -83,15 +102,26 @@ newer versions. Migrations live in `core/serialization.py` as `migrate_vN_to_vN+
 4. `os.replace(<vault>.tmp, <vault>)` (atomic within one volume on NTFS and POSIX).
 5. On POSIX, fsync the directory. On startup, remove stale `.tmp` files left by earlier crashes.
 6. If the main file fails to open, the UI *offers* to try `.bak`. It never switches silently.
+   Enforced in core: `VaultService.unlock()` only reads `.bak` when called with
+   `use_backup=True`, and `has_backup()` lets the UI decide whether to offer it
+   (test: `test_damaged_vault_never_falls_back_to_backup`). The UI side gets a pytest-qt test
+   in Phase 4.
 
 Storage stays bytes-only. The verify callback (decrypt + parse) is injected by `vault_service`.
 
 ## Recovery script (`scripts/recover_vault.py`)
 
 Standalone. Imports only the stdlib, `cryptography` and `argon2-cffi`, and never `vaultkeeper`.
-Given a vault path, it prompts for the master password with `getpass` and prints the decrypted
+Given a vault path, it prompts for the master password with `getpass` (or reads it from stdin
+as UTF-8 with `--password-stdin`), applies the same NFC rule, and prints the decrypted
 JSON to stdout. It applies the same bounds as above and contains no secrets. The user decides
 where stdout goes, and the README warns that redirecting it to a file writes plaintext.
+
+## Threading
+
+`VaultService` splits slow operations into a pure *prepare* step (KDF + decrypt, safe on a
+worker thread, touches no service state) and a *commit* step (updates state on the UI thread).
+`*_async` methods send the prepare step through an injected `TaskRunner`.
 
 ## Required tests
 

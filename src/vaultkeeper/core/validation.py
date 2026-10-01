@@ -24,7 +24,7 @@ from vaultkeeper.core.models import Account, Rank
 from vaultkeeper.errors import ValidationError
 
 # Bidi embedding/override/isolate characters can visually disguise text ("Trojan Source").
-_BIDI_CONTROLS = frozenset("‪‫‬‭‮⁦⁧⁨⁩")
+_BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _BASE32_RE = re.compile(r"^[A-Z2-7]+=*$")
 _ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
@@ -42,7 +42,7 @@ def _require_str(value: Any, field: str) -> str:
 def _check_characters(value: str, field: str, *, multiline: bool) -> None:
     allowed_controls = {"\n", "\t"} if multiline else set()
     for ch in value:
-        if ch in _BIDI_CONTROLS or ch == "﻿":
+        if ch in _BIDI_CONTROLS or ch == "\ufeff":
             raise ValidationError(field, "contains invisible formatting characters")
         category = unicodedata.category(ch)
         if category == "Cs" or (category == "Cc" and ch not in allowed_controls):
@@ -198,17 +198,24 @@ def clean_status(value: Any) -> str:
 
 
 def clean_region(value: Any, preset: c.GamePreset) -> str | None:
-    """Region must be in the preset's region list. Empty becomes ``None``."""
+    """Region must be in the preset's region list (any text for free-text presets)."""
     text = clean_optional_text(value, "region", c.MAX_REGION)
-    if text is not None and text not in preset.regions:
+    if text is not None and not preset.free_text and text not in preset.regions:
         raise ValidationError("region", "is not a region for this game")
     return text
 
 
 def clean_rank(rank: Any, preset: c.GamePreset) -> Rank:
-    """Tier must exist in the preset. Division is optional but, if given, must be in range."""
+    """Tier must exist in the preset. Division is optional but, if given, must be in range.
+
+    Free-text presets accept any tier text and no division.
+    """
     if not isinstance(rank, Rank):
         raise ValidationError("rank", "is not a rank")
+    if preset.free_text:
+        if rank.division is not None:
+            raise ValidationError("rank", "free-text ranks have no division")
+        return Rank(clean_optional_text(rank.tier, "rank", c.MAX_TIER), None)
     if rank.tier is None:
         if rank.division is not None:
             raise ValidationError("rank", "unranked accounts cannot have a division")
@@ -222,7 +229,7 @@ def clean_rank(rank: Any, preset: c.GamePreset) -> Rank:
 
 
 def clean_totp_secret(value: Any) -> str | None:
-    """Base32 TOTP secret. Spaces/hyphens are removed and letters uppercased. Empty → None."""
+    """Base32 TOTP secret. Spaces/hyphens are removed and letters uppercased. Empty -> None."""
     if value is None:
         return None
     secret = clean_secret(value, "totp_secret")

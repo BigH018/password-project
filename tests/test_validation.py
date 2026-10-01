@@ -163,6 +163,18 @@ def test_overwatch_division_5_valid_valorant_division_5_invalid() -> None:
         v.clean_rank(Rank("Gold", 5), c.VALORANT)
 
 
+def test_custom_preset_free_text_rank_and_region() -> None:
+    assert v.clean_rank(Rank("  Elite III ", None), c.CUSTOM) == Rank("Elite III", None)
+    assert v.clean_rank(Rank("", None), c.CUSTOM) == Rank(None, None)
+    assert v.clean_region("Any Server", c.CUSTOM) == "Any Server"
+    with pytest.raises(ValidationError):
+        v.clean_rank(Rank("Gold", 2), c.CUSTOM)
+    with pytest.raises(ValidationError):
+        v.clean_rank(Rank("x" * (c.MAX_TIER + 1), None), c.CUSTOM)
+    with pytest.raises(ValidationError):
+        v.clean_region("bad\x00region", c.CUSTOM)
+
+
 def test_totp_secret() -> None:
     assert v.clean_totp_secret("jbsw y3dp-ehpk 3pxp") == "JBSWY3DPEHPK3PXP"
     assert v.clean_totp_secret("") is None

@@ -10,6 +10,9 @@ from vaultkeeper.config import constants as c
 @pytest.mark.parametrize("preset", list(c.PRESETS.values()), ids=lambda p: p.key)
 def test_preset_is_consistent(preset: c.GamePreset) -> None:
     names = preset.tier_names
+    if preset.free_text:
+        assert names == () and preset.regions == ()
+        return
     assert names and len(set(names)) == len(names)
     assert preset.regions and len(set(preset.regions)) == len(preset.regions)
     for spec in preset.tiers:
@@ -48,6 +51,11 @@ def test_overwatch_ladder_divisions_run_5_to_1() -> None:
 def test_status_values() -> None:
     assert c.STATUSES == ("active", "banned", "locked", "retired")
     assert c.DEFAULT_STATUS in c.STATUSES
+
+
+def test_custom_preset_is_free_text() -> None:
+    assert c.CUSTOM.free_text and not c.VALORANT.free_text
+    assert c.format_rank(c.CUSTOM, "Elite III", None) == "Elite III"
 
 
 def test_get_preset_falls_back_to_custom() -> None:

@@ -28,7 +28,7 @@ def test_round_trip_optional_and_unicode_fields() -> None:
     game = make_game("Overwatch", "overwatch")
     data.games.append(game)
     data.accounts.append(make_account(
-        game, display_name="Joueuré\U0001f3ae", tag=None, email_password="Fake-Mail-1",
+        game, display_name="Joueur\u00e9\U0001f3ae", tag=None, email_password="Fake-Mail-1",
         email_login_url=None, region=None, rank=Rank(), recovery_email=None,
         totp_secret="JBSWY3DPEHPK3PXP", tags=(), notes="",
     ))

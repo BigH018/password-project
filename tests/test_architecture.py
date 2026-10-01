@@ -130,6 +130,17 @@ def test_no_bare_except(path: Path) -> None:
             assert node.type is not None, f"bare except at line {node.lineno}"
 
 
+TEST_FILES = sorted((ROOT / "tests").rglob("*.py"))
+
+
+@pytest.mark.parametrize("path", ALL_FILES + TEST_FILES, ids=_id)
+def test_source_is_ascii_only(path: Path) -> None:
+    """Non-ASCII must be written as escapes (blocks invisible bidi/"Trojan Source" chars)."""
+    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        bad = [hex(ord(ch)) for ch in line if ord(ch) > 126 or (ord(ch) < 32 and ch != "\t")]
+        assert not bad, f"line {lineno} has raw non-ASCII/control characters {bad}"
+
+
 def test_flag_large_files() -> None:
     """Files over MAX_LINES are flagged (warning, not failure) for splitting."""
     for path in ALL_FILES:

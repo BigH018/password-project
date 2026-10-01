@@ -58,6 +58,7 @@ class GamePreset:
     tiers: tuple[TierSpec, ...]
     regions: tuple[str, ...]
     roman_divisions: bool = False
+    free_text: bool = False  # no fixed ladder/regions: rank and region are typed freely
 
     def tier(self, name: str) -> TierSpec | None:
         """Return the tier with this exact name, or None."""
@@ -92,7 +93,9 @@ VALORANT = GamePreset(
 # Marvel Rivals. Source: esports.gg "Marvel Rivals ranks explained", elevateboost.fr
 # "Rank System Explained (2026)", checked 2026-10-01. Bronze..Celestial have divisions III-I
 # (I highest); Eternity and One Above All have none.
-# Regions are an unverified best guess: review with the user.
+# Regions: UNVERIFIED. No official NetEase list found. Broad groups agreed by third-party
+# sources (pingaim.com server map; turbosmurfs.gg "All Marvel Rivals Servers Locations",
+# Feb 2025), checked 2026-10-01. Some list 10 city-level servers, grouped here.
 MARVEL_RIVALS = GamePreset(
     key="marvel_rivals",
     label="Marvel Rivals",
@@ -121,17 +124,8 @@ OVERWATCH = GamePreset(
     regions=("Americas", "Europe", "Asia"),
 )
 
-# Generic ladder for any other game. Divisions 5-1 (1 highest), apex tiers without divisions.
-CUSTOM = GamePreset(
-    key="custom",
-    label="Custom",
-    tiers=_tiers(
-        ("Iron", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Master", "Grandmaster"),
-        (5, 4, 3, 2, 1),
-    )
-    + (TierSpec("Challenger"), TierSpec("Top")),
-    regions=("NA", "EU", "AP", "KR", "LATAM", "BR", "OCE", "Asia", "SA", "ME", "CN", "Other"),
-)
+# Any other game: no fixed ladder. Rank (as text, no division) and region are typed freely.
+CUSTOM = GamePreset(key="custom", label="Custom", tiers=(), regions=(), free_text=True)
 
 PRESETS: dict[str, GamePreset] = {p.key: p for p in (VALORANT, MARVEL_RIVALS, OVERWATCH, CUSTOM)}
 DEFAULT_PRESET_KEY = CUSTOM.key

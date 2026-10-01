@@ -64,10 +64,15 @@ opens after a game renames a tier. The UI shows unknown values as-is.
 
 Each preset defines an ordered tier list, which tiers have divisions, the division range and
 order, and a region list. Ladders are checked against current official sources when written
-(Phase 1). The source and date are recorded in a comment next to each preset. The `custom`
-preset has a generic tier list and regions.
+(Phase 1). The source and date are recorded in a comment next to each preset. Anything that
+couldn't be verified is marked UNVERIFIED in `constants.py`.
 
-The Marvel Rivals region list is an unverified best guess (pending user review).
+The `custom` preset (`free_text=True`) has no fixed ladder or region list. Rank is free text
+stored in `Rank.tier` (division must be None), and region is free text. Unknown preset keys
+fall back to `custom`.
+
+Marvel Rivals regions are UNVERIFIED: broad groups (NA, EU, SA, Asia, OCE, ME) from third-party
+server maps, because no official NetEase list was found (checked 2026-10-01).
 
 ## Duplicate rule
 
