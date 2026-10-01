@@ -11,6 +11,12 @@ password and never contains plaintext. Policy (approved):
 
 The last success and failure times (UTC ISO-8601) are kept so the UI can warn until a backup
 works again. Failures are logged by error type only (no paths).
+
+Threading (CR-L6), like ``VaultService``: ``prepare*`` reads the encrypted vault on the
+caller's (UI) thread, which is fast and never holds the vault file open during a save;
+``run_backup_job`` does the slow part (list, write, verify, rotate in the backup folder) and
+touches no service state, so it can run on a worker thread; ``finish`` records the result on
+the caller's thread. ``backup_now``/``after_save``/``on_lock_or_exit`` do all three at once.
 """
 
 from __future__ import annotations
@@ -20,17 +26,95 @@ import logging
 import re
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
 from vaultkeeper.config.constants import VAULT_EXTENSION
 from vaultkeeper.crypto import header
-from vaultkeeper.errors import ValidationError, VaultIOError, VaultKeeperError
-from vaultkeeper.storage.vault_file import copy_file_verified, read_vault_bytes
+from vaultkeeper.errors import ValidationError, VaultFormatError, VaultIOError, VaultKeeperError
+from vaultkeeper.storage.vault_file import read_vault_bytes, write_bytes_atomic
 
 log = logging.getLogger(__name__)
 
 _STAMP = "%Y%m%d-%H%M%S"
+
+
+# --- naming (shared by the service and the worker step) ---------------------------------------
+
+
+def _pattern(stem: str) -> re.Pattern[str]:
+    return re.compile(rf"^{re.escape(stem)}-backup-(\d{{8}}-\d{{6}})(?:-(\d+))?"
+                      rf"{re.escape(VAULT_EXTENSION)}$")
+
+
+def _order(pattern: re.Pattern[str], path: Path) -> tuple[str, int]:
+    """(timestamp, counter) of a backup; the first of a second is 1.
+
+    File names don't sort correctly ("-10" before "-2", "-2" before the first), so rotation
+    must never rely on name order.
+    """
+    match = pattern.match(path.name)
+    assert match is not None  # noqa: S101 - only called for listed backups
+    return match.group(1), int(match.group(2) or 1)
+
+
+def list_backup_files(folder: Path | None, stem: str) -> list[Path]:
+    """A vault's backups in ``folder``, oldest first. VaultIOError if it can't be read."""
+    if folder is None:
+        return []
+    pattern = _pattern(stem)
+    try:
+        if not folder.is_dir():
+            return []
+        names = [p for p in folder.iterdir() if pattern.match(p.name)]
+    except OSError:
+        raise VaultIOError("Could not read the backup folder.") from None
+    return sorted(names, key=lambda p: _order(pattern, p))
+
+
+@dataclass(frozen=True, slots=True)
+class BackupJob:
+    """One backup: the encrypted vault bytes (read on the caller's thread) and where to."""
+
+    data: bytes = field(repr=False)
+    folder: Path
+    stem: str
+    stamp: str
+    keep: int
+    previous_backup_at: float | None  # restored if the job fails, so it's retried soon
+
+
+def _new_target(job: BackupJob) -> Path:
+    """A new name that sorts after every existing backup made in the same second."""
+    pattern = _pattern(job.stem)
+    same_second = [n for s, n in (_order(pattern, p)
+                                  for p in list_backup_files(job.folder, job.stem))
+                   if s == job.stamp]
+    counter = max(same_second, default=0) + 1
+    while True:
+        suffix = "" if counter == 1 else f"-{counter}"
+        target = job.folder / f"{job.stem}-backup-{job.stamp}{suffix}{VAULT_EXTENSION}"
+        if not target.exists():
+            return target
+        counter += 1
+
+
+def run_backup_job(job: BackupJob) -> Path:
+    """The slow part: write and verify the copy, then rotate. Touches no service state, so
+    it is safe on a worker thread. Raises VaultKeeperError or OSError on failure."""
+
+    def same_bytes(written: bytes) -> None:
+        if written != job.data:
+            raise VaultFormatError("Backup copy does not match the vault file.")
+
+    target = _new_target(job)
+    write_bytes_atomic(target, job.data, same_bytes)
+    backups = list_backup_files(job.folder, job.stem)
+    for old in backups[: max(len(backups) - job.keep, 0)]:
+        with contextlib.suppress(OSError):
+            old.unlink()
+    return target
 
 
 class BackupService:
@@ -82,98 +166,102 @@ class BackupService:
         except OSError:
             return False
 
-    # --- naming -----------------------------------------------------------------------------
-
-    def _pattern(self) -> re.Pattern[str]:
-        return re.compile(rf"^{re.escape(self._vault.stem)}-backup-(\d{{8}}-\d{{6}})(?:-(\d+))?"
-                          rf"{re.escape(VAULT_EXTENSION)}$")
-
-    def _order(self, path: Path) -> tuple[str, int]:
-        """(timestamp, counter) of one of this vault's backups. The first of a second is 1.
-
-        File names don't sort correctly ("-10" before "-2", "-2" before the first), so
-        rotation must never rely on name order.
-        """
-        match = self._pattern().match(path.name)
-        assert match is not None  # noqa: S101 - only called for listed backups
-        return match.group(1), int(match.group(2) or 1)
+    @property
+    def vault_path(self) -> Path:
+        """The vault this service backs up."""
+        return self._vault
 
     def list_backups(self) -> list[Path]:
         """This vault's backups in the folder, oldest first (by timestamp, then counter).
 
         A folder that can't be read raises VaultIOError (never a raw OSError).
         """
-        if self.backup_dir is None:
-            return []
-        pattern = self._pattern()
-        try:
-            if not self.backup_dir.is_dir():
-                return []
-            names = [p for p in self.backup_dir.iterdir() if pattern.match(p.name)]
-        except OSError:
-            raise VaultIOError("Could not read the backup folder.") from None
-        return sorted(names, key=self._order)
-
-    def _target(self) -> Path:
-        """A new name that sorts after every existing backup made in the same second."""
-        assert self.backup_dir is not None  # noqa: S101 - checked by callers
-        stamp = self._stamp()
-        base = f"{self._vault.stem}-backup-{stamp}"
-        same_second = [n for s, n in map(self._order, self.list_backups()) if s == stamp]
-        counter = max(same_second, default=0) + 1
-        while True:
-            suffix = "" if counter == 1 else f"-{counter}"
-            target = self.backup_dir / f"{base}{suffix}{VAULT_EXTENSION}"
-            if not target.exists():
-                return target
-            counter += 1
+        return list_backup_files(self.backup_dir, self._vault.stem)
 
     # --- actions ----------------------------------------------------------------------------
 
     def _now_iso(self) -> str:
         return datetime.fromtimestamp(self._clock(), tz=UTC).isoformat(timespec="seconds")
 
-    def backup_now(self) -> Path:
-        """Write a backup immediately and rotate. Returns the new backup's path.
+    def prepare(self) -> BackupJob:
+        """Start a backup now: read the encrypted vault (fast, on the caller's thread).
 
-        A failure is recorded in ``last_failure`` (until a backup succeeds) and re-raised as
-        a VaultKeeperError.
+        Raises VaultIOError if there's no folder or no vault; a read failure is recorded.
         """
         if self.backup_dir is None:
             raise VaultIOError("Choose a backup folder first.")
         if not self._vault.is_file():
             raise VaultIOError("There is no saved vault to back up yet.")
         try:
-            target = self._target()
-            copy_file_verified(self._vault, target)
-            self._last_backup_at = self._clock()
-            self.dirty = False
-            self._rotate()
-        except (VaultKeeperError, OSError) as exc:
-            self.last_failure = self._now_iso()
-            log.warning("Backup failed (%s)", type(exc).__name__)
-            if isinstance(exc, OSError):
-                raise VaultIOError("Could not write to the backup folder.") from exc
+            data = read_vault_bytes(self._vault)
+        except VaultKeeperError as exc:
+            self._record_failure(exc)
             raise
-        self.last_success, self.last_failure = self._now_iso(), None
-        log.info("Backup written")
-        return target
+        job = BackupJob(data, self.backup_dir, self._vault.stem, self._stamp(), self.keep,
+                        self._last_backup_at)
+        self._last_backup_at, self.dirty = self._clock(), False  # later saves set dirty again
+        return job
 
-    def after_save(self) -> Path | None:
-        """Called after every save: back up if the minimum interval has passed."""
+    def prepare_after_save(self) -> BackupJob | None:
+        """After every save: a job if the minimum interval has passed, else None."""
         self.dirty = True
         if not self.enabled:
             return None
         interval = self.min_interval_minutes * 60
         if self._last_backup_at is not None and self._clock() - self._last_backup_at < interval:
             return None
-        return self.backup_now()
+        return self.prepare()
+
+    def prepare_on_lock_or_exit(self) -> BackupJob | None:
+        """On lock and exit: a job if anything changed since the last backup, else None."""
+        return self.prepare() if self.enabled and self.dirty else None
+
+    def finish(self, job: BackupJob, error: BaseException | None) -> VaultKeeperError | None:
+        """Record a job's result (caller's thread). Returns the error to show, if any."""
+        if error is None:
+            self.last_success, self.last_failure = self._now_iso(), None
+            log.info("Backup written")
+            return None
+        self._last_backup_at, self.dirty = job.previous_backup_at, True  # retry soon
+        self._record_failure(error)
+        if isinstance(error, VaultKeeperError):
+            return error
+        return VaultIOError("Could not write to the backup folder.")
+
+    def _record_failure(self, error: BaseException) -> None:
+        self.last_failure = self._now_iso()
+        log.warning("Backup failed (%s)", type(error).__name__)
+
+    def _run(self, job: BackupJob | None) -> Path | None:
+        """Run a job here and now (synchronous use)."""
+        if job is None:
+            return None
+        try:
+            target = run_backup_job(job)
+        except (VaultKeeperError, OSError) as exc:
+            error = self.finish(job, exc)
+            assert error is not None  # noqa: S101 - a failure always has an error
+            raise error from exc
+        self.finish(job, None)
+        return target
+
+    def backup_now(self) -> Path:
+        """Write a backup immediately and rotate. Returns the new backup's path.
+
+        A failure is recorded in ``last_failure`` (until a backup succeeds) and raised as a
+        VaultKeeperError.
+        """
+        target = self._run(self.prepare())
+        assert target is not None  # noqa: S101 - prepare() always returns a job
+        return target
+
+    def after_save(self) -> Path | None:
+        """Called after every save: back up if the minimum interval has passed."""
+        return self._run(self.prepare_after_save())
 
     def on_lock_or_exit(self) -> Path | None:
         """Called on lock and on exit: back up if anything changed since the last backup."""
-        if self.enabled and self.dirty:
-            return self.backup_now()
-        return None
+        return self._run(self.prepare_on_lock_or_exit())
 
     def after_password_change(self) -> Path | None:
         """Back up at once (ignoring the interval) so a backup with the new password exists."""
@@ -216,9 +304,3 @@ class BackupService:
                 deleted += 1
         log.info("Deleted %d old-password backup(s)", deleted)
         return deleted
-
-    def _rotate(self) -> None:
-        backups = self.list_backups()
-        for old in backups[: max(len(backups) - self.keep, 0)]:
-            with contextlib.suppress(OSError):
-                old.unlink()

@@ -331,7 +331,8 @@ def test_lock_backs_up_changes_and_clears_clipboard(qtbot: Any, tmp_path: Path,
     guard = SessionGuard(settings, backend=board, schedule=_scheduler([]))
     monkeypatch.setattr(app_controller.AppController, "_unlock", lambda self: None)
     controller = app_controller.AppController(settings, tmp_path / "s.json", QtTaskRunner(),
-                                              lambda p: svc, guard=guard)
+                                              lambda p: svc, guard=guard,
+                                              backup_runner=InlineTaskRunner())
     qtbot.addWidget(controller.window)
     controller.service = svc
     controller._show_unlocked()

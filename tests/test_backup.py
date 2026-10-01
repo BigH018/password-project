@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -262,3 +263,53 @@ def test_listing_an_unreadable_folder_is_a_friendly_error(
     with pytest.raises(VaultIOError):
         backups.list_backups()
 
+
+
+# --- CR-L6: prepare (caller's thread) / run (worker) / finish (caller's thread) ------------
+
+
+def test_prepare_run_finish_split(vault: VaultService, tmp_path: Path, clock: Clock,
+                                  monkeypatch: pytest.MonkeyPatch) -> None:
+    import threading
+
+    from vaultkeeper.core.backup import run_backup_job
+
+    backups = _service(vault, tmp_path, clock)
+    real_iterdir = Path.iterdir
+
+    def no_listing_here(self: Path) -> Any:
+        if threading.current_thread() is threading.main_thread():
+            raise AssertionError("the backup folder must only be listed on the worker")
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", no_listing_here)
+    job = backups.prepare()
+    assert job.data == vault.path.read_bytes() and "data" not in repr(job)
+    result: list[Path] = []
+    worker = threading.Thread(target=lambda: result.append(run_backup_job(job)))
+    worker.start()
+    worker.join(timeout=10)
+    assert result and result[0].read_bytes() == job.data
+    assert backups.last_success is None  # nothing recorded until finish (caller's thread)
+    backups.finish(job, None)
+    assert backups.last_success is not None and backups.last_failure is None
+
+
+def test_failed_job_is_recorded_and_retried_after_the_next_save(
+    vault: VaultService, tmp_path: Path, clock: Clock
+) -> None:
+    backups = _service(vault, tmp_path, clock, interval=60)
+    job = backups.prepare_after_save()
+    assert job is not None and not backups.dirty
+    error = backups.finish(job, OSError("usb stick pulled out"))
+    assert isinstance(error, VaultIOError)
+    assert backups.last_failure is not None and backups.dirty
+    assert backups.prepare_after_save() is not None  # interval reset: retried at once
+
+
+def test_lock_job_only_when_something_changed(vault: VaultService, tmp_path: Path,
+                                              clock: Clock) -> None:
+    backups = _service(vault, tmp_path, clock)
+    assert backups.prepare_on_lock_or_exit() is None
+    backups.dirty = True
+    assert backups.prepare_on_lock_or_exit() is not None

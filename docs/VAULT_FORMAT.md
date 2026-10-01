@@ -145,7 +145,8 @@ Storage stays bytes-only. The verify callback (decrypt + parse) is injected by `
   written atomically and compared with the source before they replace anything. They open
   with the same master password. After a master-password change, older backups still open with the old
   password: the app backs up at once and offers to delete them (identified by their header
-  salt). `.bak` is re-saved under the new password right after the change. Name: `<vault stem>-backup-YYYYMMDD-HHMMSS.vault`, with `-2`, `-3`, ... for more in the
+  salt). `.bak` is re-saved under the new password right after the change. The folder work
+  runs off the UI thread (`run_backup_job`); the vault bytes are read on the UI thread. Name: `<vault stem>-backup-YYYYMMDD-HHMMSS.vault`, with `-2`, `-3`, ... for more in the
   same second. Rotation orders them by timestamp and counter, not by file name.
 - **Exports** (`core/exporter.py`) are the same format with `file_kind = 2` and their own
   password, salt and key. They're decrypted and parsed before replacing anything. The app

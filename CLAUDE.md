@@ -170,6 +170,7 @@ vaultkeeper/                       repo root
       game_service.py              add (starter/template) / rename / set_template (never blocked) / delete
       search.py                    AccountFilter, free-text search (never secrets), facets, rank sort key
       backup.py                    rotating backups (byte copies of the encrypted vault), keep N;
+                                   prepare (UI thread) / run_backup_job (worker) / finish;
                                    after a password change: back up now, find old-password backups (salt)
       exporter.py                  encrypted export (own password, file kind EXPORT, .vault)
       entry_session.py             Quick Add batch state: sticky game/region/status + counter
@@ -200,6 +201,7 @@ vaultkeeper/                       repo root
                                    typed folder applied after a 400 ms pause, full paths only
       export_dialog.py             encrypted export (own password; cancel writes nothing)
       app_controller.py            screen flow: welcome -> create/unlock -> main; lock (closes dialogs); quit;
+                                   backups on their own runner (quit waits <= 15 s for one);
                                    holds the vault's instance lock from the unlock prompt until quit
       branding.py                  app icon (all .ico sizes) on every window, Windows taskbar
                                    AppUserModelID, no "?" help button on dialogs
@@ -284,6 +286,7 @@ vaultkeeper/                       repo root
                                    test_account_dialog, test_game_setup, test_pickers (+ game switching),
                                    test_shell (welcome, controller lock/demo details),
                                    test_phase5_ui (copy, auto-lock, generator, backups, export),
+                                   test_backup_async (slow folder: no freeze, lock, queue, quit),
                                    test_backup_ui (backups after a password change, failure
                                    banner until a backup works, last successful backup),
                                    test_quick_add (save & next, batch, paste, keys, timeout),
@@ -467,6 +470,13 @@ python -m vaultkeeper  # run the app
 - Riot ID = name + optional tag. Login URL is copy-only (no "open in browser").
 - Deleting a game with accounts is blocked. Export uses a separate password (import later).
 - Backups: after a save (max one per 10 min) plus on lock/exit if changed. Keep the last 10.
+- Backups run off the UI thread (CR-L6): the vault bytes are read on the UI thread (never
+  holding the file open during a save), the backup folder work runs on a separate runner
+  (not cancelled by lock: only ciphertext, result still recorded). One at a time; a request
+  while busy follows. Quit waits up to 15 s, then makes the exit backup synchronously.
+  Backups dialog "Backup now" and the post-password-change backup stay synchronous (the
+  user waits for their result). Controller tests that need sync backups pass
+  `backup_runner=InlineTaskRunner()`.
 - After a master-password change (CR-M1/SEC-M1): `.bak` is re-saved under the new password,
   a backup is made at once, and the user is offered to delete backups that still open with the
   old password (found by header salt; only offered once a new-password backup exists).
@@ -689,7 +699,7 @@ Group 5 (in progress): small and deferred items
       on confirm)
 - [x] 20 CR-L7 tell the user where the .damaged copy was saved (`last_damaged_copy`)
 - [x] 21 CR-L4 game setup warns before discarding unsaved edits (switching game, Close)
-- [ ] 22 CR-L6 backups off the UI thread via the injected TaskRunner; keep the failure
+- [x] 22 CR-L6 backups off the UI thread via the injected TaskRunner; keep the failure
       banner; lock waits for or safely cancels a running backup
 - [ ] 23 CR-L8 `_prepare_change` must not read `self._session` on the worker thread: pass
       what it needs as arguments (it also copies `disk_digest` now)
@@ -707,7 +717,8 @@ Group 6: cleanup (one commit each)
 - [ ] 28 Quick Add opens on the sidebar's selected game, else the last batch game
 - [ ] 29 cache the template-to-preset conversion in account_table.py
 - [ ] 30 split tests/test_vault_service.py and tests/ui/test_phase5_ui.py under ~300 lines;
-      also split `ui/app_controller.py` (326 lines: move backup/export wiring out) and
+      also split `ui/app_controller.py` (394 lines: move backup/export wiring out),
+      `core/backup.py` (306: e.g. old-password helpers out) and
       `core/vault_service.py` (305); flag `ui/main_window.py` (~300)
 - [ ] 31 move the §13 decision log to docs/DECISIONS.md with a pointer; add known/deferred:
       SEC-M4 (Qt 5.15.2 CVEs, plan PyQt6) and SEC-Low9 (log tracebacks contain full paths);

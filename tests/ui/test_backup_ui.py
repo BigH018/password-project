@@ -10,6 +10,7 @@ import pytest
 from conftest import FAST_KDF, MASTER, OTHER_MASTER
 from vaultkeeper.config.settings import Settings
 from vaultkeeper.core.backup import BackupService
+from vaultkeeper.core.tasks import InlineTaskRunner
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.ui import backup_dialog, messages
 
@@ -97,7 +98,7 @@ def test_controller_backs_up_after_password_change(qtbot: Any, tmp_path: Path,
                         backup_min_interval_minutes=60)
     monkeypatch.setattr(app_controller.AppController, "_unlock", lambda self: None)
     controller = app_controller.AppController(settings, tmp_path / "s.json", QtTaskRunner(),
-                                              lambda p: svc)
+                                              lambda p: svc, backup_runner=InlineTaskRunner())
     qtbot.addWidget(controller.window)
     controller.service = svc
     controller._show_unlocked()
@@ -136,7 +137,7 @@ def _controller(qtbot: Any, tmp_path: Path, svc: VaultService, backup_dir: Path,
                         backup_min_interval_minutes=60)
     monkeypatch.setattr(app_controller.AppController, "_unlock", lambda self: None)
     controller = app_controller.AppController(settings, tmp_path / "s.json", QtTaskRunner(),
-                                              lambda p: svc)
+                                              lambda p: svc, backup_runner=InlineTaskRunner())
     qtbot.addWidget(controller.window)
     controller.service = svc
     controller._show_unlocked()

@@ -6,6 +6,7 @@ UI wiring only. All decisions about vault state live in ``VaultService``.
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -16,9 +17,10 @@ from PyQt5.QtWidgets import QApplication, QDialog
 from vaultkeeper.config.constants import VAULT_EXTENSION
 from vaultkeeper.config.settings import Settings, SettingsFile
 from vaultkeeper.core.account_service import AccountService
-from vaultkeeper.core.backup import BackupService
+from vaultkeeper.core.backup import BackupJob, BackupService, run_backup_job
 from vaultkeeper.core.game_service import GameService
 from vaultkeeper.core.serialization import dumps_payload
+from vaultkeeper.core.tasks import TaskRunner
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui import messages
@@ -35,6 +37,7 @@ from vaultkeeper.ui.unlock_dialog import UnlockDialog, check_last_saved, record_
 from vaultkeeper.ui.welcome_dialog import WelcomeDialog
 
 log = logging.getLogger(__name__)
+QUIT_BACKUP_WAIT_SECONDS = 15  # a running backup gets this long to finish at quit
 
 
 def default_vault_path() -> Path:
@@ -59,11 +62,19 @@ class AppController(QObject):
         demo: bool = False,
         new_vault_dir: Path | None = None,
         guard: SessionGuard | None = None,
+        backup_runner: TaskRunner | None = None,
     ) -> None:
         super().__init__()
         self._new_vault_dir = new_vault_dir
         self.guard = guard or SessionGuard(settings)
         self.backups: BackupService | None = None
+        # Backups run on their own runner (CR-L6): lock cancels self._runner's work, but a
+        # backup in flight only handles encrypted bytes and its result must be recorded.
+        self._backup_runner: TaskRunner = backup_runner or QtTaskRunner()
+        self._backup_busy = False
+        self._backup_next: Callable[[], BackupJob | None] | None = None  # asked while busy
+        self._backup_idle = threading.Event()
+        self._backup_idle.set()
         self.settings = SettingsFile(settings_file, settings)
         self._runner = runner
         self._factory = service_factory
@@ -183,10 +194,13 @@ class AppController(QObject):
     def _start_backups(self, service: VaultService) -> None:
         s = self.settings.current
         folder = Path(s.backup_dir) if s.backup_dir else None
-        self.backups = BackupService(service.path, folder, s.backup_keep,
-                                     s.backup_min_interval_minutes,
-                                     last_success=s.backup_last_success,
-                                     last_failure=s.backup_last_failure)
+        if self.backups is None or self.backups.vault_path != service.path:
+            # One service per vault, kept across lock/unlock: a backup that finishes after a
+            # lock records its result on the live object.
+            self.backups = BackupService(service.path, folder, s.backup_keep,
+                                         s.backup_min_interval_minutes,
+                                         last_success=s.backup_last_success,
+                                         last_failure=s.backup_last_failure)
         for listener in (self._after_save_backup, self._remember_last_saved,
                          self._report_damaged_copy):
             if listener not in service.on_saved:
@@ -202,12 +216,56 @@ class AppController(QObject):
         self.settings.update(backup_last_success=self.backups.last_success,
                              backup_last_failure=self.backups.last_failure)
 
-    def _run_backup(self, step: Callable[[], Path | None]) -> None:
+    def _run_backup(self, prepare: Callable[[], BackupJob | None]) -> None:
+        """Back up in the background: the slow folder work never freezes the window (CR-L6)."""
+        if self.backups is None:
+            return
+        if self._backup_busy:
+            self._backup_next = prepare  # one at a time; the latest request follows
+            return
         try:
-            if step() is not None:
-                self.window.statusBar().showMessage("Backup saved.", 4000)
+            job = prepare()
         except VaultKeeperError as exc:
-            self.window.statusBar().showMessage(f"Backup failed: {error_text(exc)}", 10000)
+            self._backup_result(f"Backup failed: {error_text(exc)}")
+            return
+        if job is None:
+            return
+        service, idle = self.backups, self._backup_idle
+        self._backup_busy = True
+        idle.clear()
+
+        def work() -> Path:
+            try:
+                return run_backup_job(job)
+            finally:
+                idle.set()  # quit() waits for this
+
+        self._backup_runner.submit(work, lambda _p: self._backup_done(service, job, None),
+                                   lambda exc: self._backup_done(service, job, exc))
+
+    def _backup_done(self, service: BackupService, job: BackupJob,
+                     exc: BaseException | None) -> None:
+        self._backup_busy = False
+        error = service.finish(job, exc)
+        self._backup_result(f"Backup failed: {error_text(error)}" if error else "Backup saved.")
+        follow, self._backup_next = self._backup_next, None
+        if follow is not None and service is self.backups:
+            self._run_backup(follow)
+
+    def _backup_result(self, text: str) -> None:
+        self.window.statusBar().showMessage(text, 10000 if "failed" in text else 4000)
+        self._backup_status_changed()
+
+    def _backup_before_quit(self) -> None:
+        """Wait (bounded) for a running backup, then make the exit backup here and now."""
+        if self.backups is None:
+            return
+        self._backup_idle.wait(timeout=QUIT_BACKUP_WAIT_SECONDS)
+        try:
+            if self.backups.on_lock_or_exit() is not None:
+                log.info("Exit backup written")
+        except VaultKeeperError:
+            log.info("Exit backup failed; it is shown after the next start")
         self._backup_status_changed()
 
     def _report_damaged_copy(self) -> None:
@@ -224,11 +282,12 @@ class AppController(QObject):
 
     def _after_save_backup(self) -> None:
         if self.backups is not None:
-            self._run_backup(self.backups.after_save)
+            self.backups.dirty = True  # even if it has to wait, lock/exit back this save up
+            self._run_backup(self.backups.prepare_after_save)
 
     def _backup_now(self) -> None:
         if self.backups is not None:
-            self._run_backup(self.backups.backup_now)
+            self._run_backup(self.backups.prepare)
 
     def _backup_settings(self) -> None:
         if self.backups is None:
@@ -302,8 +361,8 @@ class AppController(QObject):
         self.close_dialogs()
         self._runner.cancel_pending()
         self.guard.disarm()  # stops auto-lock and clears our clipboard copy
-        if self.backups is not None:
-            self._run_backup(self.backups.on_lock_or_exit)
+        if self.backups is not None:  # runs on; only encrypted bytes, result still recorded
+            self._run_backup(self.backups.prepare_on_lock_or_exit)
         if self.service is not None:
             self.service.lock()
         self._unlock_minimized = self.window.isMinimized()
@@ -320,8 +379,7 @@ class AppController(QObject):
         self._runner.cancel_pending()
         self.guard.disarm()
         self.guard.shutdown()
-        if self.backups is not None:
-            self._run_backup(self.backups.on_lock_or_exit)
+        self._backup_before_quit()
         if self.service is not None:
             self.service.lock()
         self._instance_lock.release()
