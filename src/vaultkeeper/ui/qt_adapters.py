@@ -11,6 +11,8 @@ is simply abandoned on exit. ``cancel_pending()`` discards results from work the
 away from (for example by closing the dialog).
 
 ``VaultInstanceLock`` stops two running copies of the app from opening the same vault.
+``set_capture_excluded``/``CaptureFilter`` hide windows from screenshots and screen sharing
+(Windows only, optional).
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 from PyQt5.QtCore import QEvent, QLockFile, QMimeData, QObject, QTimer, pyqtSignal
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QWidget
 
 T = TypeVar("T")
 log = logging.getLogger(__name__)
@@ -233,3 +235,54 @@ class VaultInstanceLock:
         if self._lock is not None:
             self._lock.unlock()
         self._lock, self._path = None, None
+
+
+WDA_NONE = 0x0
+WDA_EXCLUDEFROMCAPTURE = 0x11  # Windows 10 2004+; older Windows shows the window black
+
+
+def set_capture_excluded(widget: QWidget, excluded: bool, *, platform: str = sys.platform,
+                         user32: Any = None) -> bool:
+    """Exclude a top-level window from screenshots and screen sharing (SEC-Low6).
+
+    Windows only (SetWindowDisplayAffinity); a no-op returning False elsewhere.
+    """
+    if platform != "win32":
+        return False
+    try:
+        if user32 is None:
+            import ctypes
+            from ctypes import wintypes
+
+            user32 = ctypes.windll.user32
+            user32.SetWindowDisplayAffinity.argtypes = (wintypes.HWND, wintypes.DWORD)
+            user32.SetWindowDisplayAffinity.restype = wintypes.BOOL
+        affinity = WDA_EXCLUDEFROMCAPTURE if excluded else WDA_NONE
+        ok = user32.SetWindowDisplayAffinity(int(widget.winId()), affinity)
+    except (OSError, AttributeError) as exc:
+        log.warning("Screen-capture setting not applied (%s)", type(exc).__name__)
+        return False
+    return bool(ok)
+
+
+class CaptureFilter(QObject):
+    """App-wide: while enabled, every top-level window is excluded from screen capture."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.enabled = False
+
+    def set_enabled(self, enabled: bool) -> None:
+        """Switch on/off, applying it to the windows already open."""
+        if enabled == self.enabled:
+            return
+        self.enabled = enabled
+        for widget in QApplication.topLevelWidgets():
+            if widget.isVisible():
+                set_capture_excluded(widget, enabled)
+
+    def eventFilter(self, obj: QObject, event: Any) -> bool:  # noqa: N802 - Qt API
+        if (self.enabled and event.type() == QEvent.Show and isinstance(obj, QWidget)
+                and obj.isWindow()):
+            set_capture_excluded(obj, True)
+        return False

@@ -129,6 +129,7 @@ class MainWindow(QMainWindow):
         self.manage_games_action.triggered.connect(self._manage_games)
         self.panel.activated.connect(self._edit_selected)
         self.show_passwords_action.toggled.connect(self.panel.set_show_passwords)
+        self.panel.reveal_expired.connect(lambda: self.show_passwords_action.setChecked(False))
         self.lock_action.triggered.connect(self.lock_requested)
         self.change_password_action.triggered.connect(self.change_password_requested)
         self.quit_action.triggered.connect(self.quit_requested)

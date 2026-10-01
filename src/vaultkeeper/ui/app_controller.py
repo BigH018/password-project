@@ -163,6 +163,7 @@ class AppController(QObject):
         )
         self._present_window()
         self._start_backups(self.service)
+        self.window.panel.set_reveal_seconds(self.settings.current.show_passwords_seconds)
         note = check_last_saved(self.window, self.settings, self.service)
         self.window.statusBar().showMessage(note, 10000)
         self.guard.arm()
@@ -271,6 +272,7 @@ class AppController(QObject):
         # Merged into the current settings: the Backups dialog may have changed them meanwhile.
         saved = self.settings.update(**dialog.values())
         self.guard.apply_settings(self.settings.current)
+        self.window.panel.set_reveal_seconds(self.settings.current.show_passwords_seconds)
         if saved:
             self.window.statusBar().showMessage("Settings saved.", 4000)
         else:

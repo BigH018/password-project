@@ -44,6 +44,8 @@ class Settings:
     quick_add_autolock_minutes: int = c.DEFAULT_QUICK_ADD_AUTOLOCK_MINUTES
     lock_on_minimize: bool = c.DEFAULT_LOCK_ON_MINIMIZE
     lock_on_session_lock: bool = c.DEFAULT_LOCK_ON_SESSION_LOCK
+    show_passwords_seconds: int = c.DEFAULT_SHOW_PASSWORDS_SECONDS
+    exclude_from_capture: bool = c.DEFAULT_EXCLUDE_FROM_CAPTURE
     window_geometry: str | None = None  # Qt saveGeometry() as base64; None = default size
     backup_last_success: str | None = None  # UTC ISO-8601 of the last good backup
     backup_last_failure: str | None = None  # set until a backup succeeds again
@@ -57,8 +59,9 @@ _INT_RANGES: dict[str, tuple[int, int]] = {
     "clipboard_clear_seconds": c.CLIPBOARD_CLEAR_SECONDS_RANGE,
     "autolock_minutes": c.AUTOLOCK_MINUTES_RANGE,
     "quick_add_autolock_minutes": c.AUTOLOCK_MINUTES_RANGE,
+    "show_passwords_seconds": c.SHOW_PASSWORDS_SECONDS_RANGE,
 }
-_BOOL_FIELDS = frozenset({"lock_on_minimize", "lock_on_session_lock"})
+_BOOL_FIELDS = frozenset({"lock_on_minimize", "lock_on_session_lock", "exclude_from_capture"})
 _PATH_FIELDS = frozenset({"vault_path", "backup_dir"})
 _TIMESTAMP_FIELDS = frozenset({"backup_last_success", "backup_last_failure"})
 

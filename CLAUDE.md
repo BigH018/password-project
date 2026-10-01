@@ -190,8 +190,10 @@ vaultkeeper/                       repo root
     ui/
       qt_adapters.py               QtTaskRunner, QtClipboardBackend (Win+V exclusion), qt_schedule,
                                    ActivityFilter, SessionLockWatcher (Windows lock via ctypes),
-                                   VaultInstanceLock (QLockFile <vault>.lock, stale after a crash)
-      session_guard.py             ClipboardGuard + auto-lock wiring; emits lock_needed(reason)
+                                   VaultInstanceLock (QLockFile <vault>.lock, stale after a crash),
+                                   set_capture_excluded + CaptureFilter (Windows display affinity)
+      session_guard.py             ClipboardGuard + auto-lock wiring; emits lock_needed(reason);
+                                   applies the screen-capture exclusion setting
       copy_actions.py              copy actions (Ctrl+B/C/E on the table) + right-click menu
       backup_dialog.py             backup folder / keep N / interval + Backup now;
                                    after_password_change (offer to delete old-password backups)
@@ -206,7 +208,8 @@ vaultkeeper/                       repo root
       main_window.py               actions, backup banners (opened from .bak, backups off, last
                                    backup failed), status bar, delete; hosts AccountsPanel
       main_menus.py                toolbar + File/Games/Tools menus built from the window's actions
-      accounts_view.py             AccountsPanel: game sidebar | search bar over sortable table
+      accounts_view.py             AccountsPanel: game sidebar | search bar over sortable table;
+                                   reveal_timer ("Show passwords" switches itself off)
       unlock_dialog.py             master password, busy state, explicit "Try the backup copy",
                                    small "Open a different vault file..." link (restore / moved vault);
                                    check_last_saved/record_last_saved ("Last saved", older-file warning)
@@ -218,7 +221,8 @@ vaultkeeper/                       repo root
       quick_add_dialog.py          Quick Add (AccountDialog subclass): Enter = save & next,
                                    batch values, counter, paste box, Ctrl+Enter anywhere
       settings_dialog.py           File -> Settings (Ctrl+,): auto-lock/Quick Add timeouts, clipboard
-                                   seconds, lock switches, restore defaults, Backups... button
+                                   seconds, lock switches, show-passwords seconds, screen-capture
+                                   exclusion, restore defaults, Backups... button
       generator_dialog.py          password generator (copy or "use" into the form)
       safe_text.py                 plain_label / message_box (Qt.PlainText: user data is never
                                    rendered as HTML), link_label for fixed app text only
@@ -290,6 +294,7 @@ vaultkeeper/                       repo root
                                    test_account_form (name#tag split on focus-out),
                                    test_cleanup (menus, boxes, dialogs deleted after use),
                                    test_last_saved ("Last saved" on unlock, older-file warning),
+                                   test_reveal_and_capture (Show passwords timeout, capture),
                                    test_secret_field (clear() wipes undo in all password dialogs)
 ```
 
@@ -469,6 +474,10 @@ python -m vaultkeeper  # run the app
   and unlock dialogs show a warning (never a block) if other users may be able to change
   files in the vault's folder: on Windows a drive root, one level below it (e.g. C:\Vaults)
   or the Public folder; elsewhere a group/world-writable folder.
+- "Show passwords" switches itself off after `show_passwords_seconds` (default 30 s, 5-600)
+  and on lock (SEC-Low6). Optional `exclude_from_capture` (default off, Windows only, a
+  no-op elsewhere): every top-level window gets SetWindowDisplayAffinity(WDA_EXCLUDEFROM
+  CAPTURE) via an app-wide filter; applied live from the Settings dialog.
 - Rollback notice (SEC-M3): after unlock the status bar shows "Last saved: <time>". Settings
   keep the last `updated_at` seen per vault path (timestamps only, max 20 vaults). If a vault
   opens OLDER than that (not when opened from `.bak`), a warning says it may be an old copy
@@ -646,7 +655,7 @@ Group 3 (done, pushed): entry workflow and lock rule
 - [x] 13 SEC-M3 show "Last saved: <updated_at>" on unlock; keep last-seen updated_at per
       vault path in settings (timestamp only); warn if the vault goes backwards in time
 
-Group 4 (in progress): input and key-derivation hardening
+Group 4 (done): input and key-derivation hardening
 - [x] 14 SEC-Low1 password_policy: NFC first, strip surrounding whitespace and Unicode Cf
       before length/common-list checks (tests: decomposed chars, trailing space, ZWSP)
 - [x] 15 SEC-Low3 reject Unicode Cf in names, logins, identity fields (ZWJ only if needed
@@ -656,7 +665,7 @@ Group 4 (in progress): input and key-derivation hardening
 - [x] 17 SEC-Low7 temp files opened exclusively (O_EXCL, no symlink following) in
       vault_file.py and the settings writer; warn (don't block) at create/open if the folder
       looks writable by other users (e.g. directly under C:\)
-- [ ] 18 SEC-Low6 "Show passwords" switches off after a configurable timeout (default 30 s)
+- [x] 18 SEC-Low6 "Show passwords" switches off after a configurable timeout (default 30 s)
       and on lock; optional setting (off, Windows only, tested no-op elsewhere) for
       SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)
 

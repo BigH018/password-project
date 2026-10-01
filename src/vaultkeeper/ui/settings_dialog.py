@@ -6,6 +6,7 @@ controller validates, saves and applies them (``config.settings``, ``SessionGuar
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
 from typing import Any
 
@@ -32,6 +33,8 @@ EDITED_FIELDS = (
     "clipboard_clear_seconds",
     "lock_on_minimize",
     "lock_on_session_lock",
+    "show_passwords_seconds",
+    "exclude_from_capture",
 )
 
 
@@ -64,6 +67,12 @@ class SettingsDialog(QDialog):
         self.session_check = QCheckBox("Lock when Windows locks (Win+L, sleep, switch user)",
                                        self)
         self.session_check.setChecked(settings.lock_on_session_lock)
+        self.reveal_spin = _spin(c.SHOW_PASSWORDS_SECONDS_RANGE,
+                                 settings.show_passwords_seconds, " s", self)
+        self.capture_check = QCheckBox(
+            "Hide Account Manager from screenshots and screen sharing (Windows)", self)
+        self.capture_check.setChecked(settings.exclude_from_capture)
+        self.capture_check.setEnabled(sys.platform == "win32")
         note = plain_label(
             "Locking clears the window and any password still on the clipboard.", self)
         note.setWordWrap(True)
@@ -80,6 +89,7 @@ class SettingsDialog(QDialog):
         form.addRow("Auto-lock after", self.autolock_spin)
         form.addRow("While Quick Add is open", self.quick_add_spin)
         form.addRow("Clear copied passwords after", self.clipboard_spin)
+        form.addRow("Hide shown passwords after", self.reveal_spin)
         buttons = QHBoxLayout()
         buttons.addWidget(self.backups_button)
         buttons.addWidget(self.defaults_button)
@@ -90,6 +100,7 @@ class SettingsDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(self.minimize_check)
         layout.addWidget(self.session_check)
+        layout.addWidget(self.capture_check)
         layout.addWidget(note)
         layout.addLayout(buttons)
 
@@ -106,6 +117,8 @@ class SettingsDialog(QDialog):
             "clipboard_clear_seconds": self.clipboard_spin.value(),
             "lock_on_minimize": self.minimize_check.isChecked(),
             "lock_on_session_lock": self.session_check.isChecked(),
+            "show_passwords_seconds": self.reveal_spin.value(),
+            "exclude_from_capture": self.capture_check.isChecked(),
         }
 
     def restore_defaults(self) -> None:
@@ -116,6 +129,8 @@ class SettingsDialog(QDialog):
         self.clipboard_spin.setValue(d.clipboard_clear_seconds)
         self.minimize_check.setChecked(d.lock_on_minimize)
         self.session_check.setChecked(d.lock_on_session_lock)
+        self.reveal_spin.setValue(d.show_passwords_seconds)
+        self.capture_check.setChecked(d.exclude_from_capture)
 
     def _backups(self) -> None:
         if self._open_backups is not None:

@@ -215,3 +215,19 @@ def test_settings_temp_file_is_created_exclusively(tmp_path: Path,
     assert load_settings(path).autolock_minutes == 7
     assert not path.with_name("settings.json.tmp").exists()
 
+
+
+# --- SEC-Low6: show-passwords timeout and capture exclusion ----------------------------------
+
+
+def test_reveal_and_capture_settings(tmp_path: Path) -> None:
+    assert Settings().show_passwords_seconds == c.DEFAULT_SHOW_PASSWORDS_SECONDS
+    assert Settings().exclude_from_capture is False
+    path = tmp_path / "settings.json"
+    save_settings(path, Settings(show_passwords_seconds=90, exclude_from_capture=True))
+    loaded = load_settings(path)
+    assert loaded.show_passwords_seconds == 90 and loaded.exclude_from_capture is True
+    low, high = c.SHOW_PASSWORDS_SECONDS_RANGE
+    for bad in (low - 1, high + 1, "30", True):
+        assert settings_from_dict({"show_passwords_seconds": bad}).show_passwords_seconds == 30
+    assert settings_from_dict({"exclude_from_capture": "yes"}).exclude_from_capture is False

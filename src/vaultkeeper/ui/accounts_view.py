@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
@@ -17,6 +17,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from vaultkeeper.config.constants import DEFAULT_SHOW_PASSWORDS_SECONDS
 from vaultkeeper.core.account_service import AccountService
 from vaultkeeper.core.game_service import GameService
 from vaultkeeper.core.models import Account
@@ -31,6 +32,7 @@ class AccountsPanel(QWidget):
 
     selection_changed = pyqtSignal()
     activated = pyqtSignal()  # double-click / Enter on a row
+    reveal_expired = pyqtSignal()  # "Show passwords" has been on long enough
 
     def __init__(self, parent: Any = None) -> None:
         super().__init__(parent)
@@ -42,6 +44,10 @@ class AccountsPanel(QWidget):
         self.sidebar = GameSidebar(self)
         self.search = SearchBar(self)
         self.model = AccountTableModel(self)
+        self.reveal_timer = QTimer(self)
+        self.reveal_timer.setSingleShot(True)
+        self.reveal_timer.setInterval(DEFAULT_SHOW_PASSWORDS_SECONDS * 1000)
+        self.reveal_timer.timeout.connect(self.reveal_expired)
         self.proxy = AccountSortProxy(self)
         self.proxy.setSourceModel(self.model)
         self.table = QTableView(self)
@@ -150,6 +156,14 @@ class AccountsPanel(QWidget):
                 return True
         return False
 
+    def set_reveal_seconds(self, seconds: int) -> None:
+        """How long "Show passwords" stays on before switching itself off (SEC-Low6)."""
+        self.reveal_timer.setInterval(seconds * 1000)
+
     def set_show_passwords(self, show: bool) -> None:
-        """Reveal or mask the password column."""
+        """Reveal or mask the password column. Revealing starts the auto-hide timer."""
         self.model.set_show_passwords(show)
+        if show:
+            self.reveal_timer.start()
+        else:
+            self.reveal_timer.stop()

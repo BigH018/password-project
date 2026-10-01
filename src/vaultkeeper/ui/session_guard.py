@@ -14,6 +14,7 @@ from vaultkeeper.security.autolock import InactivityTracker
 from vaultkeeper.security.clipboard import ClipboardBackend, ClipboardGuard, Scheduler
 from vaultkeeper.ui.qt_adapters import (
     ActivityFilter,
+    CaptureFilter,
     QtClipboardBackend,
     SessionLockWatcher,
     qt_schedule,
@@ -36,9 +37,12 @@ class SessionGuard(QObject):
         self.tracker = InactivityTracker(settings.autolock_minutes * 60)
         self.armed = False  # only lock while unlocked
         self._filter = ActivityFilter(self.tracker.record_activity)
+        self.capture = CaptureFilter()  # optional exclusion from screen capture (SEC-Low6)
         app = QApplication.instance()
         if app is not None:
             app.installEventFilter(self._filter)
+            app.installEventFilter(self.capture)
+        self.capture.set_enabled(settings.exclude_from_capture)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._check)
         self._timer.start(CHECK_INTERVAL_MS)
@@ -49,6 +53,7 @@ class SessionGuard(QObject):
         self._settings = settings
         self.clipboard.clear_after = settings.clipboard_clear_seconds
         self.tracker.set_base_timeout(settings.autolock_minutes * 60)
+        self.capture.set_enabled(settings.exclude_from_capture)
 
     def shutdown(self) -> None:
         """Stop checking and remove the app-wide activity filter (on quit)."""
@@ -56,6 +61,7 @@ class SessionGuard(QObject):
         app = QApplication.instance()
         if app is not None:
             app.removeEventFilter(self._filter)
+            app.removeEventFilter(self.capture)
 
     def watch_session(self, window_id: int) -> bool:
         """Listen for Windows locking. Returns True if the watcher is active.

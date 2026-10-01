@@ -239,6 +239,9 @@ No custom cryptography is used anywhere. The full byte layout is documented in
 - Argon2 runs on a background thread, so the window never freezes.
 - **Only one running copy can open a vault**, and a save is refused if the file was changed
   by something else since you unlocked, so two copies can never overwrite each other.
+- **"Show passwords" switches itself off** after 30 seconds (configurable) and on lock.
+  Optionally (*Settings*, Windows only) the app's windows can be hidden from screenshots
+  and screen sharing.
 - **Warns about shared folders:** if other users of the PC could change files where the vault
   is (for example directly under `C:\`), the create and unlock screens say so.
 - **"Last saved" on unlock**, and a warning if the vault file is older than the version this
@@ -284,6 +287,8 @@ Open *File -> Settings...* (`Ctrl+,`). Changes apply immediately, with no restar
 | Clear copied passwords after | 15 s | 5-300 s |
 | Lock when the window is minimized | On | |
 | Lock when Windows locks | On | |
+| Hide shown passwords after | 30 s | 5-600 s |
+| Hide from screenshots and screen sharing (Windows) | Off | |
 | Backups: keep newest / at most one per | 10 / 10 min | 1-100 / 0-1440 min |
 
 | What | Where (Windows) |
