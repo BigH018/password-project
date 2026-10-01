@@ -129,3 +129,9 @@ def run_modal(dialog: QDialog) -> int:
 SHARED_FOLDER = (
     "Other users of this PC may be able to change files in this folder. A folder inside your "
     "own user profile (such as Documents) is safer.")
+DAMAGED_COPY_KEPT = (
+    "A damaged copy of your vault file was found and kept, so nothing is lost:" + chr(10)
+    + "{path}" + chr(10) + chr(10)
+    + "Your vault is saved and working normally. Once you're sure you don't need that copy, "
+    "you can delete it.")
+

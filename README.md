@@ -263,7 +263,7 @@ No custom cryptography is used anywhere. The full byte layout is documented in
 | Feature | What it does |
 |---|---|
 | **Automatic backups** | After a save (at most once per 10 minutes) and on lock or exit if anything changed. Byte-for-byte copies of the encrypted vault, named `<vault>-backup-YYYYMMDD-HHMMSS.vault`. Keeps the newest 10 (configurable). If a backup fails, a banner says so until one works again; *File -> Backups...* shows the last successful backup. After you change your master password a backup is made at once, and the app offers to delete older backups, which still open with the OLD password. |
-| **`.bak` file** | The previous version of the vault, kept next to it on every save. If the main file is damaged, the unlock screen offers it, but only when you ask. After a master-password change it is re-saved under the new password. |
+| **`.bak` file** | The previous version of the vault, kept next to it on every save. If the main file is damaged, the unlock screen offers it, but only when you ask. After a master-password change it is re-saved under the new password. If the main file was damaged, it is kept as `<vault>.damaged-<time>` and the app tells you where. |
 | **Encrypted export** | *File -> Export encrypted copy...* writes a separate encrypted file protected by **its own password**. Cancelling writes nothing. |
 | **Recovery script** | `scripts/recover_vault.py` decrypts a vault with only `cryptography` and `argon2-cffi` installed, independent of the app. |
 

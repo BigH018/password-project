@@ -294,7 +294,8 @@ vaultkeeper/                       repo root
                                    test_plain_text (HTML-looking user data shown literally),
                                    test_account_form (name#tag split on focus-out),
                                    test_cleanup (menus, boxes, dialogs deleted after use),
-                                   test_last_saved ("Last saved" on unlock, older-file warning),
+                                   test_last_saved ("Last saved" on unlock, older-file warning,
+                                   where a damaged copy was kept),
                                    test_reveal_and_capture (Show passwords timeout, capture),
                                    test_dialog_paths (full paths, unreadable folders, debounce),
                                    test_secret_field (clear() wipes undo in all password dialogs)
@@ -521,7 +522,8 @@ python -m vaultkeeper  # run the app
 - After unlocking from `.bak`, the next save copies the main file to `<vault>.damaged-<time>`
   (never moves it, so a failed save can't leave the vault missing) and leaves `.bak`
   untouched (a damaged file never overwrites the good backup). The same happens if the main
-  file stops decrypting with the session key while unlocked.
+  file stops decrypting with the session key while unlocked. The user is then told once
+  where the damaged copy was kept (full path; CR-L7).
 - One vault is the normal case. "Create a new vault" is only offered on the first-run Welcome
   screen. The unlock screen has a small "Open a different vault file..." link (for restoring a
   backup or a moved vault) that opens a file picker directly.
@@ -682,7 +684,7 @@ Group 5 (in progress): small and deferred items
 - [x] 19 CR-L3 full paths required in backup/export dialogs; unreadable folders handled
       without "Something went wrong"; don't list the folder on every keystroke (debounce or
       on confirm)
-- [ ] 20 CR-L7 tell the user where the .damaged copy was saved (`last_damaged_copy`)
+- [x] 20 CR-L7 tell the user where the .damaged copy was saved (`last_damaged_copy`)
 - [ ] 21 CR-L4 game setup warns before discarding unsaved edits (switching game, Close)
 - [ ] 22 CR-L6 backups off the UI thread via the injected TaskRunner; keep the failure
       banner; lock waits for or safely cancels a running backup

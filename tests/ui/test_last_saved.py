@@ -94,3 +94,23 @@ def test_opening_the_backup_copy_never_warns(qtbot: Any, tmp_path: Path, vault: 
     _controller(qtbot, tmp_path, vault, monkeypatch, seen={vault_key(vault): FUTURE},
                 use_backup=True)
     assert warnings == []
+
+
+# --- CR-L7: say where the damaged copy was kept --------------------------------------------
+
+
+def test_damaged_copy_location_is_reported_once(qtbot: Any, tmp_path: Path, vault: Path,
+                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    shown: list[str] = []
+    monkeypatch.setattr(messages, "show_warning", lambda _p, _t, text: shown.append(text))
+    damaged = bytearray(vault.read_bytes())
+    damaged[-1] ^= 0x01
+    vault.write_bytes(bytes(damaged))
+    controller = _controller(qtbot, tmp_path, vault, monkeypatch, use_backup=True)
+    assert shown == []
+    controller.service.save()  # the damaged main file is copied aside now
+    kept = controller.service.last_damaged_copy
+    assert kept is not None and kept.exists()
+    assert len(shown) == 1 and str(kept) in shown[0]
+    controller.service.save()
+    assert len(shown) == 1  # reported once

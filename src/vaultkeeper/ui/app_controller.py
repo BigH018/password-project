@@ -70,6 +70,7 @@ class AppController(QObject):
         self.service: VaultService | None = None
         self._unlock_minimized = False
         self._instance_lock = VaultInstanceLock()  # one running copy per vault (SEC-M2)
+        self._reported_damaged: Path | None = None
         self.window = MainWindow(demo=demo)
         self.window.restore_geometry_text(settings.window_geometry)  # shown after unlock
         self.window.lock_requested.connect(self.lock)
@@ -186,7 +187,8 @@ class AppController(QObject):
                                      s.backup_min_interval_minutes,
                                      last_success=s.backup_last_success,
                                      last_failure=s.backup_last_failure)
-        for listener in (self._after_save_backup, self._remember_last_saved):
+        for listener in (self._after_save_backup, self._remember_last_saved,
+                         self._report_damaged_copy):
             if listener not in service.on_saved:
                 service.on_saved.append(listener)
         self.window.set_backups_enabled(self.backups.enabled)
@@ -207,6 +209,14 @@ class AppController(QObject):
         except VaultKeeperError as exc:
             self.window.statusBar().showMessage(f"Backup failed: {error_text(exc)}", 10000)
         self._backup_status_changed()
+
+    def _report_damaged_copy(self) -> None:
+        """Say where a damaged main file was kept (once per copy, CR-L7)."""
+        kept = self.service.last_damaged_copy if self.service is not None else None
+        if kept is not None and kept != self._reported_damaged:
+            self._reported_damaged = kept
+            messages.show_warning(self.window, "Damaged file kept",
+                                  messages.DAMAGED_COPY_KEPT.format(path=kept))
 
     def _remember_last_saved(self) -> None:
         if self.service is not None and self.service.is_unlocked:
