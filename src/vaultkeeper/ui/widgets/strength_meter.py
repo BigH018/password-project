@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QLabel, QProgressBar, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QProgressBar, QVBoxLayout, QWidget
 
 from vaultkeeper.core.password_policy import strength_hint
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import MUTED_STYLE
 
 
@@ -17,8 +18,8 @@ class StrengthMeter(QWidget):
         self.bar.setRange(0, 4)
         self.bar.setTextVisible(False)
         self.bar.setFixedHeight(8)
-        self.label = QLabel(self)
-        self.suggestions = QLabel(self)
+        self.label = plain_label(parent=self)
+        self.suggestions = plain_label(parent=self)
         self.suggestions.setWordWrap(True)
         self.suggestions.setStyleSheet(MUTED_STYLE)
 

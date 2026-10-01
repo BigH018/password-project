@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from PyQt5.QtWidgets import QDialog, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QDialog, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from vaultkeeper.core.account_service import AccountService, DuplicateField
 from vaultkeeper.core.models import Account, Game
 from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui import messages
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE
 from vaultkeeper.ui.widgets.account_form import AccountForm
 
@@ -39,13 +40,13 @@ class AccountDialog(QDialog):
 
         self.form = AccountForm(games, require_game_choice=must_choose, parent=self)
         self.form.load(self._base, select_game=not must_choose)
-        self.duplicate_label = QLabel(self)
+        self.duplicate_label = plain_label(parent=self)
         self.duplicate_label.setStyleSheet(DUPLICATE_STYLE)
         self.duplicate_label.setWordWrap(True)
-        self.move_label = QLabel(self)
+        self.move_label = plain_label(parent=self)
         self.move_label.setStyleSheet(DUPLICATE_STYLE)
         self.move_label.setWordWrap(True)
-        self.error_label = QLabel(self)
+        self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.error_label.setWordWrap(True)
         self.save_button = QPushButton("Save", self)

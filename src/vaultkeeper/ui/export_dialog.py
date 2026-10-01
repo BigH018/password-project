@@ -12,7 +12,6 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QProgressBar,
     QPushButton,
@@ -26,6 +25,7 @@ from vaultkeeper.core.password_policy import check_master_password
 from vaultkeeper.core.tasks import TaskRunner
 from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui.messages import error_text
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
 from vaultkeeper.ui.widgets.secret_field import SecretField
 from vaultkeeper.ui.widgets.strength_meter import StrengthMeter
@@ -66,8 +66,8 @@ class ExportDialog(QDialog):
         self.setWindowTitle("Export encrypted copy")
         self.setMinimumWidth(500)
 
-        intro = QLabel("Creates an encrypted copy of your whole vault, protected by a separate "
-                       "export password. It never contains plaintext.", self)
+        intro = plain_label("Creates an encrypted copy of your whole vault, protected by a "
+                            "separate export password. It never contains plaintext.", self)
         intro.setWordWrap(True)
         intro.setStyleSheet(MUTED_STYLE)
         self.path_edit = QLineEdit(str(default_path), self)
@@ -76,7 +76,7 @@ class ExportDialog(QDialog):
         self.password = SecretField("Export password (at least 12 characters)", self)
         self.confirm = SecretField("Type it again", self)
         self.meter = StrengthMeter(self)
-        self.error_label = QLabel(self)
+        self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.error_label.setWordWrap(True)
         self.busy_bar = QProgressBar(self)

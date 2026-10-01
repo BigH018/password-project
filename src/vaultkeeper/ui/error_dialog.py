@@ -14,6 +14,8 @@ from PyQt5.QtCore import QObject, Qt, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import QMessageBox, QWidget
 
+from vaultkeeper.ui.safe_text import message_box, set_informative_text
+
 ERROR_TITLE = "Something went wrong"
 ERROR_TEXT = (
     "Something unexpected went wrong. Your saved accounts are safe: every change is saved "
@@ -26,9 +28,9 @@ OPEN_LOGS = "Open log folder"
 
 def build_error_box(log_folder: Path | None, parent: QWidget | None = None) -> QMessageBox:
     """The notice itself (not shown). Has an "Open log folder" button when a folder is known."""
-    box = QMessageBox(QMessageBox.Warning, ERROR_TITLE, ERROR_TEXT, QMessageBox.Ok, parent)
+    box = message_box(QMessageBox.Warning, ERROR_TITLE, ERROR_TEXT, QMessageBox.Ok, parent)
     if log_folder is not None:
-        box.setInformativeText(LOG_NOTE.format(folder=log_folder))
+        set_informative_text(box, LOG_NOTE.format(folder=log_folder))
         box.addButton(OPEN_LOGS, QMessageBox.ActionRole)
     box.setDefaultButton(QMessageBox.Ok)
     box.setStyleSheet("QLabel#qt_msgbox_label, QLabel#qt_msgbox_informativelabel "

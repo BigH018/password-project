@@ -36,7 +36,7 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | Vault lifecycle (create, unlock, lock, change password) | core/vault_service.py, core/tasks.py, core/password_policy.py, errors.py, core/serialization.py | crypto/ signatures, storage/vault_file.py signatures, tests/test_vault_service.py, test_password_policy.py |
 | Accounts, games, search, duplicates | docs/DATA_MODEL.md, core/models.py, core/game_template.py, the relevant service (account_service, game_service or search), core/store.py, core/validation.py | core/text_validation.py, matching test file, tests/conftest.py (FakeStore) |
 | Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/game_template.py, core/serialization.py, core/template_codec.py, core/migrations.py, tests/test_serialization.py, tests/test_migrations.py | grep ui/ for the field to see where it is displayed |
-| A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/theme.py, and signatures of the services it calls (main window: also ui/accounts_view.py) | ui/app_controller.py (screen flow), ui/qt_adapters.py, tests/ui_support.py, matching tests/ui file |
+| A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/safe_text.py, ui/theme.py, and signatures of the services it calls (main window: also ui/accounts_view.py) | ui/app_controller.py (screen flow), ui/qt_adapters.py, tests/ui_support.py, matching tests/ui file |
 | App startup, demo mode | app.py, demo.py, ui/app_controller.py | config/settings.py, config/logging_setup.py, tests/test_demo.py |
 | Game templates, Game setup | docs/DATA_MODEL.md, core/game_template.py, core/template_validation.py, ui/game_setup_dialog.py | ui/widgets/ladder_editor.py, extra_fields_editor.py, account_form.py, tests/test_templates.py, tests/ui/test_game_setup.py |
 | Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures, core/validation.py signatures | tests/test_paste_assist.py, test_entry_session.py |
@@ -206,6 +206,8 @@ vaultkeeper/                       repo root
       settings_dialog.py           File -> Settings (Ctrl+,): auto-lock/Quick Add timeouts, clipboard
                                    seconds, lock switches, restore defaults, Backups... button
       generator_dialog.py          password generator (copy or "use" into the form)
+      safe_text.py                 plain_label / message_box (Qt.PlainText: user data is never
+                                   rendered as HTML), link_label for fixed app text only
       messages.py                  generic error texts (error_text, FIELD_LABELS = on-screen field
                                    names) + confirm/error boxes
       error_dialog.py              ErrorReporter: "Something went wrong" notice for uncaught errors
@@ -231,7 +233,8 @@ vaultkeeper/                       repo root
     ui_support.py                  pytest plugin: off-screen Qt, QtTaskRunner, Gate (blocking KDF),
                                    SessionGuard shutdown + gc after each test
     fake_data.py                   obviously fake games/accounts
-    test_architecture.py           AST scan: no PyQt5 in headless layers, no forbidden calls/imports
+    test_architecture.py           AST scan: no PyQt5 in headless layers, no forbidden calls/imports,
+                                   labels/message boxes only via ui/safe_text.py
     test_no_network.py             flows run with sockets blocked
     test_models.py                 model invariants, repr hides secrets
     test_serialization.py          round trip, schema version, malformed input
@@ -260,7 +263,8 @@ vaultkeeper/                       repo root
                                    test_branding (icon, titles, no "?", window hidden while locked),
                                    test_settings_dialog (values, defaults, save + apply live),
                                    test_window_geometry (saved on lock/quit, restored at start),
-                                   test_error_dialog (notice, threads, field labels complete)
+                                   test_error_dialog (notice, threads, field labels complete),
+                                   test_plain_text (HTML-looking user data shown literally)
 ```
 
 ---
@@ -509,6 +513,9 @@ python -m vaultkeeper  # run the app
   (`tests/ui_support.py`). Without it, guards' app-wide event filters were deleted by the GC
   mid-event in a later test: a Windows access violation (seen in 8d).
 - Spin boxes are left unstyled in dark.qss (QSS can't draw arrows without image files).
+- User data is never rendered as HTML (SEC-H1): labels and message boxes come from
+  `ui/safe_text.py` (Qt.PlainText), form-row labels with user text use `plain_label`, and
+  tooltips are fixed text. `test_architecture.py` enforces it.
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
   logs), deleted on exit; leftovers are swept at the next demo start. Real settings untouched.
 

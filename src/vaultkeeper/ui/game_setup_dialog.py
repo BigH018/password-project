@@ -17,7 +17,6 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -32,6 +31,7 @@ from vaultkeeper.core.game_service import GameService
 from vaultkeeper.core.game_template import OPTIONAL_FIELDS, STARTERS, GameTemplate, starter_template
 from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui import messages
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
 from vaultkeeper.ui.widgets.extra_fields_editor import ExtraFieldsEditor
 from vaultkeeper.ui.widgets.ladder_editor import LadderEditor
@@ -65,7 +65,7 @@ class GameSetupDialog(QDialog):
         self.regions.setPlaceholderText("One region per line, e.g.\nEU\nNA-East")
         self.field_toggles = {key: QCheckBox(label, self) for key, label in FIELD_LABELS.items()}
         self.extras = ExtraFieldsEditor(self)
-        self.error_label = QLabel(self)
+        self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.error_label.setWordWrap(True)
         self.save_button = QPushButton("Save game", self)
@@ -97,7 +97,8 @@ class GameSetupDialog(QDialog):
         grid = QGridLayout(fields_box)
         for i, box in enumerate(self.field_toggles.values()):
             grid.addWidget(box, i // 3, i % 3)
-        always = QLabel("Always shown: name, login, password, email, status, labels, notes.", self)
+        always = plain_label(
+            "Always shown: name, login, password, email, status, labels, notes.", self)
         always.setStyleSheet(MUTED_STYLE)
         grid.addWidget(always, 2, 0, 1, 3)
         extras_box = QGroupBox("Extra fields", self)

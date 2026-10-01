@@ -14,7 +14,6 @@ from PyQt5.QtWidgets import (
     QDialog,
     QFormLayout,
     QHBoxLayout,
-    QLabel,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -23,6 +22,7 @@ from PyQt5.QtWidgets import (
 
 from vaultkeeper.config import constants as c
 from vaultkeeper.config.settings import Settings
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import MUTED_STYLE
 
 # The settings this dialog edits (backup settings live in the Backups dialog).
@@ -64,7 +64,8 @@ class SettingsDialog(QDialog):
         self.session_check = QCheckBox("Lock when Windows locks (Win+L, sleep, switch user)",
                                        self)
         self.session_check.setChecked(settings.lock_on_session_lock)
-        note = QLabel("Locking clears the window and any password still on the clipboard.", self)
+        note = plain_label(
+            "Locking clears the window and any password still on the clipboard.", self)
         note.setWordWrap(True)
         note.setStyleSheet(MUTED_STYLE)
 

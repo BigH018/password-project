@@ -11,7 +11,6 @@ from PyQt5.QtWidgets import (
     QDialog,
     QFormLayout,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QPushButton,
     QSlider,
@@ -22,6 +21,7 @@ from PyQt5.QtWidgets import (
 
 from vaultkeeper.core import generator as g
 from vaultkeeper.errors import ValidationError
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
 
 
@@ -53,9 +53,9 @@ class GeneratorDialog(QDialog):
         self.preview = QLineEdit(self)
         self.preview.setReadOnly(True)
         self.preview.setFont(QFont("Consolas", 11))
-        self.strength = QLabel(self)
+        self.strength = plain_label(parent=self)
         self.strength.setStyleSheet(MUTED_STYLE)
-        self.error_label = QLabel(self)
+        self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.regenerate_button = QPushButton("Regenerate", self)
         self.copy_button = QPushButton("Copy", self)

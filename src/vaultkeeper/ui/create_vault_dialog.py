@@ -11,7 +11,6 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QProgressBar,
     QPushButton,
@@ -24,6 +23,7 @@ from vaultkeeper.core.password_policy import check_master_password
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import WeakPasswordError
 from vaultkeeper.ui.messages import error_text
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
 from vaultkeeper.ui.widgets.secret_field import SecretField
 from vaultkeeper.ui.widgets.strength_meter import StrengthMeter
@@ -68,12 +68,12 @@ class CreateVaultDialog(QDialog):
         self.password = SecretField("At least 12 characters; a passphrase is best", self)
         self.confirm = SecretField("Type it again", self)
         self.meter = StrengthMeter(self)
-        warning = QLabel(
+        warning = plain_label(
             "There is no way to recover a forgotten master password. Write it down and keep "
             "it somewhere safe and offline.", self)
         warning.setWordWrap(True)
         warning.setStyleSheet(MUTED_STYLE)
-        self.error_label = QLabel(self)
+        self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.error_label.setWordWrap(True)
         self.busy_bar = QProgressBar(self)

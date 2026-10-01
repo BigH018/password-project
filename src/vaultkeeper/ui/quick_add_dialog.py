@@ -15,7 +15,6 @@ from PyQt5.QtGui import QKeySequence
 from PyQt5.QtWidgets import (
     QComboBox,
     QHBoxLayout,
-    QLabel,
     QPlainTextEdit,
     QPushButton,
     QShortcut,
@@ -28,6 +27,7 @@ from vaultkeeper.core.entry_session import EntrySession
 from vaultkeeper.core.models import Account, Game
 from vaultkeeper.core.paste_assist import PasteSuggestions, suggest
 from vaultkeeper.ui.account_dialog import AccountDialog
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import MUTED_STYLE
 
 COUNTER_STYLE = "color: #8fd18f; font-weight: bold;"
@@ -49,9 +49,9 @@ class QuickAddDialog(AccountDialog):
         self.save_button.setText("Save && next (Enter)")
         self.cancel_button.setText("Close (Esc)")
 
-        self.counter = QLabel(session.counter_text(), self)
+        self.counter = plain_label(session.counter_text(), self)
         self.counter.setStyleSheet(COUNTER_STYLE)
-        hint = QLabel("Batch mode: game, region and status stay set for the next entry.", self)
+        hint = plain_label("Batch mode: game, region and status stay set for the next entry.", self)
         hint.setStyleSheet(MUTED_STYLE)
         self.paste_box = QPlainTextEdit(self)
         self.paste_box.setPlaceholderText(
@@ -61,10 +61,10 @@ class QuickAddDialog(AccountDialog):
         self.paste_box.setFixedHeight(80)
         self.fill_button = QPushButton("Fill from paste", self)
         self.fill_button.setAutoDefault(False)
-        self.paste_result = QLabel(self)
+        self.paste_result = plain_label(parent=self)
         self.paste_result.setWordWrap(True)
         self.paste_result.setStyleSheet(MUTED_STYLE)
-        self.saved_label = QLabel(self)
+        self.saved_label = plain_label(parent=self)
         self.saved_label.setStyleSheet(MUTED_STYLE)
 
         top = QHBoxLayout()

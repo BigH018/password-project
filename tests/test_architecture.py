@@ -148,3 +148,81 @@ def test_flag_large_files() -> None:
         lines = len(path.read_text(encoding="utf-8").splitlines())
         if lines > MAX_LINES:
             warnings.warn(f"{_id(path)} has {lines} lines; consider splitting", stacklevel=1)
+
+
+# --- SEC-H1: no user data rendered as HTML --------------------------------------------------
+# Qt's AutoText renders HTML-looking text (an account named "<img src=//host/x>" would load a
+# remote image). Labels and message boxes are only built in ui/safe_text.py, which sets
+# Qt.PlainText; text that Qt turns into a label by itself must be a fixed literal.
+UI_DIR = SRC / "ui"
+SAFE_TEXT = UI_DIR / "safe_text.py"
+RICH_TEXT_WIDGETS = {"QLabel", "QMessageBox"}
+STATIC_BOXES = {"critical", "warning", "information", "question", "about"}
+FIXED_TEXT_ONLY = {"setToolTip", "setStatusTip", "setWhatsThis", "link_label"}
+
+
+def _is_fixed_text(node: ast.expr) -> bool:
+    """A string literal or an UPPER_CASE module constant: never user data."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return True
+    return isinstance(node, ast.Name) and node.id.isupper()
+
+
+def _rich_text_risks(tree: ast.AST) -> list[str]:
+    problems: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+        owner = func.value.id if (isinstance(func, ast.Attribute)
+                                  and isinstance(func.value, ast.Name)) else ""
+        where = f"line {node.lineno}"
+        if name in RICH_TEXT_WIDGETS:
+            problems.append(f"{where}: {name}() - use safe_text.plain_label/message_box")
+        if owner == "QMessageBox" and name in STATIC_BOXES:
+            problems.append(f"{where}: QMessageBox.{name}() - use safe_text.message_box")
+        if name in FIXED_TEXT_ONLY and node.args and not _is_fixed_text(node.args[0]):
+            problems.append(f"{where}: {name}() needs fixed text")
+        if name == "addRow" and len(node.args) >= 2:
+            first = node.args[0]
+            is_plain = (isinstance(first, ast.Call) and isinstance(first.func, ast.Name)
+                        and first.func.id == "plain_label")
+            if not (is_plain or _is_fixed_text(first)):
+                problems.append(f"{where}: addRow(text, ...) needs fixed text or plain_label()")
+    return problems
+
+
+UI_FILES = [p for p in _python_files(UI_DIR) if p != SAFE_TEXT]
+
+
+@pytest.mark.parametrize("path", UI_FILES, ids=_id)
+def test_ui_never_renders_user_text_as_html(path: Path) -> None:
+    assert _rich_text_risks(_parse(path)) == []
+
+
+def test_rich_text_check_catches_risky_code() -> None:
+    risky = (
+        "a = QLabel(name)\n"
+        "b = QtWidgets.QLabel(self)\n"
+        "QMessageBox.critical(None, 't', text)\n"
+        "box = QMessageBox()\n"
+        "w.setToolTip(account.notes)\n"
+        "form.addRow(custom.label, widget)\n"
+        "link_label(f'{name}', self)\n"
+    )
+    assert len(_rich_text_risks(ast.parse(risky))) == 7
+    safe = (
+        "a = plain_label(name, self)\n"
+        "w.setToolTip('Fixed help')\n"
+        "form.addRow('Name', widget)\n"
+        "form.addRow(plain_label(custom.label, self), widget)\n"
+        "form.addRow(self.extra_box)\n"
+        "link_label(BACKUPS_OFF, self)\n"
+    )
+    assert _rich_text_risks(ast.parse(safe)) == []
+
+
+def test_safe_text_sets_plain_format() -> None:
+    source = SAFE_TEXT.read_text(encoding="utf-8")
+    assert source.count("setTextFormat(Qt.PlainText)") >= 2

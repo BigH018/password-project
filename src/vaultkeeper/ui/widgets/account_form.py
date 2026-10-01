@@ -15,7 +15,6 @@ from PyQt5.QtWidgets import (
     QComboBox,
     QFormLayout,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
@@ -26,6 +25,7 @@ from vaultkeeper.config.constants import STATUSES
 from vaultkeeper.core.game_template import CustomField, FieldKind, GameTemplate
 from vaultkeeper.core.models import Account, Game
 from vaultkeeper.ui.generator_dialog import GeneratorDialog
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.widgets.rank_picker import NOT_IN_LIST, RankPicker, RegionPicker
 from vaultkeeper.ui.widgets.secret_field import SecretField
 
@@ -52,7 +52,7 @@ class AccountForm(QWidget):
             self.game.addItem(game.name, game.id)
         self.display_name = QLineEdit(self)
         self.display_name.setPlaceholderText("In-game name / Riot ID name")
-        self.hash_label = QLabel("#", self)
+        self.hash_label = plain_label("#", self)
         self.tag = QLineEdit(self)
         self.tag.setPlaceholderText("Tag")
         self.tag.setMaximumWidth(110)
@@ -95,7 +95,7 @@ class AccountForm(QWidget):
             ("Region", self.region), ("Rank", self.rank), ("Status", self.status),
             ("Recovery email", self.recovery_email), ("Labels", self.tags), ("Notes", self.notes),
         ):  # fmt: skip
-            self.form.addRow(label, widget)
+            self.form.addRow(plain_label(label, self), widget)
         self.form.addRow(self.extra_box)
         # Optional standard field -> widgets to hide with it.
         self._optional = {
@@ -169,7 +169,7 @@ class AccountForm(QWidget):
         for custom in fields:
             widget = self._make_extra_widget(custom, values.get(custom.id, ""))
             self._extra_widgets[custom.id] = (custom, widget)
-            self.extra_layout.addRow(custom.label, widget)
+            self.extra_layout.addRow(plain_label(custom.label, self.extra_box), widget)
         self.extra_box.setVisible(bool(fields))
 
     def _make_extra_widget(self, custom: CustomField, value: str) -> ExtraWidget:

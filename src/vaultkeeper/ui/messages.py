@@ -15,6 +15,7 @@ from vaultkeeper.errors import (
     VaultKeeperError,
     WeakPasswordError,
 )
+from vaultkeeper.ui.safe_text import message_box
 
 AUTH_FAILED = "Wrong password or the vault file is damaged."
 DAMAGED_FILE = "The vault file is damaged or isn't an Account Manager vault."
@@ -84,13 +85,14 @@ def error_text(exc: BaseException) -> str:
 
 
 def show_error(parent: QWidget | None, title: str, text: str) -> None:
-    """Modal error box."""
-    QMessageBox.critical(parent, title, text)
+    """Modal error box (plain text: ``text`` may name the user's data)."""
+    box = message_box(QMessageBox.Critical, title, text, QMessageBox.Ok, parent)
+    box.exec_()
 
 
 def confirm(parent: QWidget | None, title: str, text: str, ok_text: str = "OK") -> bool:
     """Modal yes/no question. Returns True only if the user clicks ``ok_text``."""
-    box = QMessageBox(QMessageBox.Question, title, text, QMessageBox.Cancel, parent)
+    box = message_box(QMessageBox.Question, title, text, QMessageBox.Cancel, parent)
     ok = box.addButton(ok_text, QMessageBox.AcceptRole)
     box.setDefaultButton(QMessageBox.Cancel)
     box.exec_()

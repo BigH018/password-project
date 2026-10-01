@@ -10,7 +10,6 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QPushButton,
     QSpinBox,
@@ -22,6 +21,7 @@ from vaultkeeper.config import constants as c
 from vaultkeeper.core.backup import BackupService
 from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui.messages import error_text
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE, WARNING_BANNER_STYLE
 
 FolderChooser = Callable[[QWidget, str], str]
@@ -42,8 +42,8 @@ class BackupDialog(QDialog):
         self.setWindowTitle("Backups")
         self.setMinimumWidth(520)
 
-        intro = QLabel("Backups are encrypted copies of your vault (same master password). "
-                       "Pick a folder on another drive or a USB stick if you can.", self)
+        intro = plain_label("Backups are encrypted copies of your vault (same master password). "
+                            "Pick a folder on another drive or a USB stick if you can.", self)
         intro.setWordWrap(True)
         intro.setStyleSheet(MUTED_STYLE)
         self.folder = QLineEdit(str(backups.backup_dir or ""), self)
@@ -56,12 +56,12 @@ class BackupDialog(QDialog):
         self.interval_spin.setRange(*c.BACKUP_MIN_INTERVAL_MINUTES_RANGE)
         self.interval_spin.setValue(backups.min_interval_minutes)
         self.interval_spin.setSuffix(" min")
-        self.warning = QLabel(self)
+        self.warning = plain_label(parent=self)
         self.warning.setWordWrap(True)
         self.warning.setStyleSheet(WARNING_BANNER_STYLE)
-        self.status = QLabel(self)
+        self.status = plain_label(parent=self)
         self.status.setStyleSheet(MUTED_STYLE)
-        self.error_label = QLabel(self)
+        self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.error_label.setWordWrap(True)
         self.backup_now_button = QPushButton("Backup now", self)

@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PyQt5.QtWidgets import QDialog, QFileDialog, QLabel, QPushButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QDialog, QFileDialog, QPushButton, QVBoxLayout, QWidget
 
 from vaultkeeper.config.constants import DISPLAY_NAME, VAULT_EXTENSION, WINDOW_TITLE
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import MUTED_STYLE
 
 FileChooser = Callable[[QWidget], str]
@@ -34,7 +35,7 @@ class WelcomeDialog(QDialog):
         self.setWindowTitle(WINDOW_TITLE)
         self.setMinimumWidth(420)
 
-        intro = QLabel(
+        intro = plain_label(
             f"{DISPLAY_NAME} keeps your game accounts in one encrypted file on this PC. "
             "Nothing is ever sent over the network.", self)
         intro.setWordWrap(True)

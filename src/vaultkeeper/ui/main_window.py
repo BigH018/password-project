@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from PyQt5.QtCore import QByteArray, QEvent, Qt, pyqtSignal
 from PyQt5.QtGui import QCloseEvent, QKeySequence
-from PyQt5.QtWidgets import QAction, QLabel, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QAction, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
 from vaultkeeper.config.constants import WINDOW_TITLE
 from vaultkeeper.core.account_service import AccountService
@@ -24,6 +24,7 @@ from vaultkeeper.ui.generator_dialog import GeneratorDialog
 from vaultkeeper.ui.main_menus import install_toolbar_and_menus
 from vaultkeeper.ui.messages import confirm, error_text, show_error
 from vaultkeeper.ui.quick_add_dialog import QuickAddDialog
+from vaultkeeper.ui.safe_text import link_label, plain_label
 from vaultkeeper.ui.theme import MUTED_STYLE, WARNING_BANNER_STYLE
 
 BACKUPS_OFF = ("Backups are off. <a href='setup'>Choose a backup folder</a> before entering "
@@ -57,17 +58,17 @@ class MainWindow(QMainWindow):
         self._vault_path = ""
         self.entry_session = EntrySession()
 
-        self.banner = QLabel(BACKUP_BANNER, self)
+        self.banner = plain_label(BACKUP_BANNER, self)
         self.banner.setWordWrap(True)
         self.banner.setStyleSheet(WARNING_BANNER_STYLE)
         self.banner.hide()
-        self.backups_off = QLabel(BACKUPS_OFF, self)
+        self.backups_off = link_label(BACKUPS_OFF, self)
         self.backups_off.setStyleSheet(WARNING_BANNER_STYLE)
         self.backups_off.linkActivated.connect(lambda _link: self.backups_requested.emit())
         self.backups_off.hide()
         self.panel = AccountsPanel(self)
         self.copy = CopyActions(self, self.panel, self._game_by_id)
-        self.locked_label = QLabel("Locked", self)
+        self.locked_label = plain_label("Locked", self)
         self.locked_label.setAlignment(Qt.AlignCenter)
         self.locked_label.setStyleSheet(MUTED_STYLE)
         self.stack = QStackedWidget(self)

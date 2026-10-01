@@ -9,7 +9,6 @@ from PyQt5.QtWidgets import (
     QDialog,
     QFormLayout,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QPushButton,
     QSpinBox,
@@ -18,6 +17,7 @@ from PyQt5.QtWidgets import (
 )
 
 from vaultkeeper.core.game_template import MAX_DIVISIONS
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
 
 
@@ -43,10 +43,11 @@ class AddRankDialog(QDialog):
         self.count.setRange(1, MAX_DIVISIONS)
         self.count.setValue(3)
         self.count.setEnabled(False)
-        hint = QLabel("Add ranks from lowest to highest. Press Enter to add the next one.", self)
+        hint = plain_label(
+            "Add ranks from lowest to highest. Press Enter to add the next one.", self)
         hint.setStyleSheet(MUTED_STYLE)
         hint.setWordWrap(True)
-        self.error_label = QLabel(self)
+        self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.add_button = QPushButton("Add", self)
         self.add_button.setDefault(True)

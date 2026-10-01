@@ -14,7 +14,6 @@ from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtWidgets import (
     QDialog,
     QHBoxLayout,
-    QLabel,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
@@ -25,6 +24,7 @@ from vaultkeeper.config.constants import WINDOW_TITLE
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import VaultAuthError, VaultFormatError
 from vaultkeeper.ui.messages import error_text
+from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
 from vaultkeeper.ui.welcome_dialog import FileChooser, choose_vault_file
 from vaultkeeper.ui.widgets.secret_field import SecretField
@@ -58,11 +58,11 @@ class UnlockDialog(QDialog):
         self.setWindowTitle(WINDOW_TITLE)
         self.setMinimumWidth(440)
 
-        self.path_label = QLabel(f"Vault: {service.path}", self)
+        self.path_label = plain_label(f"Vault: {service.path}", self)
         self.path_label.setStyleSheet(MUTED_STYLE)
         self.path_label.setWordWrap(True)
         self.password = SecretField("Master password", self)
-        self.error_label = QLabel(self)
+        self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.error_label.setWordWrap(True)
         self.busy_bar = QProgressBar(self)
@@ -72,7 +72,7 @@ class UnlockDialog(QDialog):
         self.busy_bar.hide()
 
         self.backup_button = QPushButton("Try the backup copy", self)
-        self.backup_note = QLabel(BACKUP_EXPLANATION, self)
+        self.backup_note = plain_label(BACKUP_EXPLANATION, self)
         self.backup_note.setWordWrap(True)
         self.backup_note.setStyleSheet(MUTED_STYLE)
         self.backup_button.hide()
@@ -94,7 +94,7 @@ class UnlockDialog(QDialog):
         footer.addStretch(1)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Enter your master password to unlock the vault.", self))
+        layout.addWidget(plain_label("Enter your master password to unlock the vault.", self))
         layout.addWidget(self.path_label)
         layout.addWidget(self.password)
         layout.addWidget(self.error_label)
