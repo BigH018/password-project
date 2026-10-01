@@ -298,6 +298,8 @@ Open *File -> Settings...* (`Ctrl+,`). Changes apply immediately, with no restar
 | Logs (no secrets) | `%APPDATA%\VaultKeeper\logs\` |
 | Backups | The folder you choose in *File -> Backups...* |
 
+Log files never contain passwords or account data, but they can contain folder paths (which may include your Windows user name). Don't post them publicly; if someone asks for one to help with a problem, open it and check it first.
+
 "VaultKeeper" is the project's internal name, used for folders and the Python package.
 
 ---
