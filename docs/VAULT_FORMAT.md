@@ -164,6 +164,9 @@ where stdout goes, and the README warns that redirecting it to a file writes pla
 
 `VaultService` splits slow operations into a pure *prepare* step (KDF + decrypt, safe on a
 worker thread, touches no service state) and a *commit* step (updates state on the UI thread).
+For a password change the live session is snapshotted on the caller's thread (with its own key
+copy, wiped afterwards); the commit is refused with `VaultLockedError` if the vault was locked
+in the meantime, so a change asked for before a lock is never applied after it.
 `*_async` methods send the prepare step through an injected `TaskRunner`.
 
 ## Required tests

@@ -13,7 +13,7 @@ import hmac
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from vaultkeeper.core import vault_disk
@@ -155,20 +155,29 @@ class VaultService:
         on_disk = None if use_backup else vault_disk.digest(blob)
         return _Session(key, hdr.salt, hdr.kdf, data, from_backup=use_backup, disk_digest=on_disk)
 
-    def _prepare_change(self, current: str, new: str) -> _Session:
-        session = self._require_session()
-        check_master_password(new)
-        candidate = self._kdf(current, session.salt, session.kdf)
+    def _snapshot(self) -> tuple[_Session, _Session]:
+        """(live session, copy with its own key) taken on the caller's thread (CR-L8)."""
+        live = self._require_session()
+        return live, replace(live, key=bytearray(live.key))
+
+    def _prepare_change(self, current: str, new: str, old: _Session) -> _Session:
+        """Works only on ``old`` (a snapshot), never on the live session, which may be locked
+        and wiped meanwhile. The snapshot's key copy is wiped when done."""
         try:
-            matches = hmac.compare_digest(bytes(candidate), bytes(session.key))
+            check_master_password(new)
+            candidate = self._kdf(current, old.salt, old.kdf)
+            try:
+                matches = hmac.compare_digest(bytes(candidate), bytes(old.key))
+            finally:
+                wipe(candidate)
+            if not matches:
+                self._sleep(self._delay)
+                raise VaultAuthError()
+            salt = new_salt()
+            key = self._kdf(new, salt, self._kdf_params)
+            return _Session(key, salt, self._kdf_params, old.data, disk_digest=old.disk_digest)
         finally:
-            wipe(candidate)
-        if not matches:
-            self._sleep(self._delay)
-            raise VaultAuthError()
-        salt = new_salt()
-        key = self._kdf(new, salt, self._kdf_params)
-        return _Session(key, salt, self._kdf_params, session.data, disk_digest=session.disk_digest)
+            wipe(old.key)
 
     # --- commit steps (caller's thread) -----------------------------------------------------
 
@@ -183,8 +192,11 @@ class VaultService:
         vault_file.cleanup_stale_temp_files(self._path)
         log.info("Vault unlocked")
 
-    def _commit_change(self, session: _Session) -> None:
+    def _commit_change(self, session: _Session, origin: _Session) -> None:
+        """Only applies if the session the change started from is still the live one."""
         try:
+            if self._session is not origin:
+                raise VaultLockedError("The vault was locked; the password was not changed.")
             self._write(session)
         except BaseException:
             wipe(session.key)
@@ -228,7 +240,8 @@ class VaultService:
 
     def change_password(self, current: str, new: str) -> None:
         """Re-encrypt with a new password, fresh salt and current default KDF params."""
-        self._commit_change(self._prepare_change(current, new))
+        live, snapshot = self._snapshot()
+        self._commit_change(self._prepare_change(current, new, snapshot), live)
 
     def save(self) -> None:
         """Encrypt and atomically write the current data (fresh nonce every time)."""
@@ -262,8 +275,9 @@ class VaultService:
     def change_password_async(self, current: str, new: str, on_done: Callable[[], None],
                               on_error: Callable[[BaseException], None]) -> None:
         """Like ``change_password`` but runs the KDF through the task runner."""
-        self._submit(lambda: self._prepare_change(current, new), self._commit_change,
-                     on_done, on_error)
+        live, snapshot = self._snapshot()
+        self._submit(lambda: self._prepare_change(current, new, snapshot),
+                     lambda session: self._commit_change(session, live), on_done, on_error)
 
     def _submit(self, prepare: Callable[[], _Session], commit: Callable[[_Session], None],
                 on_done: Callable[[], None], on_error: Callable[[BaseException], None]) -> None:

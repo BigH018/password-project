@@ -409,6 +409,16 @@ class DeferredRunner:
     def submit(self, task: Any, on_success: Any, on_error: Any) -> None:
         self.pending.append((task, on_success, on_error))
 
+    def run(self) -> None:
+        """Run the latest task and deliver its result, like the real runners."""
+        task, on_success, on_error = self.pending.pop()
+        try:
+            result = task()
+        except Exception as exc:  # noqa: BLE001 - delivered like the real runners do
+            on_error(exc)
+            return
+        on_success(result)
+
 
 def test_prepare_step_does_not_mutate_state(make_service: Factory) -> None:
     make_service().create(MASTER)
@@ -441,3 +451,59 @@ def test_fast_kdf_fixture_is_used(make_service: Factory) -> None:
     svc = make_service()
     svc.create(MASTER)
     assert svc._session is not None and svc._session.kdf == FAST_KDF
+
+
+# --- CR-L8: the change-password prepare step touches no service state ----------------------
+
+
+def test_prepare_change_touches_no_service_state(make_service: Factory) -> None:
+    """The worker step must not read the live session (it may be locked/wiped meanwhile)."""
+    runner = DeferredRunner()
+    svc = make_service(runner=runner)
+    svc.create(MASTER)
+    done: list[bool] = []
+    svc.change_password_async(MASTER, OTHER_MASTER, lambda: done.append(True),
+                              lambda exc: done.append(False))
+    task, on_success, _on_error = runner.pending.pop()
+    live = svc._session
+    svc._session = None  # anything that reads the live session now fails
+    try:
+        result = task()  # the worker step
+    finally:
+        svc._session = live
+    on_success(result)  # the commit step (caller's thread)
+    assert done == [True]
+    svc.lock()
+    make_service().unlock(OTHER_MASTER)
+
+
+def test_change_requested_before_a_lock_is_never_applied(make_service: Factory,
+                                                         vault_path: Path) -> None:
+    runner = DeferredRunner()
+    svc = make_service(runner=runner)
+    svc.create(MASTER)
+    _populate(svc)
+    before = vault_path.read_bytes()
+    errors: list[BaseException] = []
+    svc.change_password_async(MASTER, OTHER_MASTER, lambda: errors.append(AssertionError()),
+                              errors.append)
+    svc.lock()
+    svc.unlock(MASTER)  # a new session before the old request finishes
+    runner.run()
+    assert len(errors) == 1 and isinstance(errors[0], VaultLockedError)
+    assert vault_path.read_bytes() == before  # nothing written under the new password
+    svc.lock()
+    make_service().unlock(MASTER)
+
+
+def test_change_still_works_without_interference(make_service: Factory) -> None:
+    runner = DeferredRunner()
+    svc = make_service(runner=runner)
+    svc.create(MASTER)
+    done: list[bool] = []
+    svc.change_password_async(MASTER, OTHER_MASTER, lambda: done.append(True),
+                              lambda exc: done.append(False))
+    runner.run()
+    assert done == [True]
+    svc.lock()
+    make_service().unlock(OTHER_MASTER)

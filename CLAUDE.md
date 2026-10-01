@@ -101,7 +101,7 @@ scripts/recover_vault.py is standalone: it must NOT import vaultkeeper.
 3. `crypto` and `storage` deal in bytes and headers. They know nothing about accounts or games.
 4. `ui` holds NO business or crypto logic. If a UI file decides a business rule, move it to `core`.
 5. Slow work (Argon2) runs through an injected `TaskRunner` (`core/vault_service.py`):
-   a pure *prepare* step runs on the runner, and the *commit* step updates state on the UI
+   a pure *prepare* step (inputs snapshotted on the caller's thread) runs on the runner, and the *commit* step updates state on the UI
    thread. Tests use `InlineTaskRunner` (`core/tasks.py`). The UI supplies `QtTaskRunner`
    (`ui/qt_adapters.py`): daemon threads so a hung KDF never blocks quitting, and
    `cancel_pending()` discards results when the user closes a dialog mid-work.
@@ -701,7 +701,7 @@ Group 5 (in progress): small and deferred items
 - [x] 21 CR-L4 game setup warns before discarding unsaved edits (switching game, Close)
 - [x] 22 CR-L6 backups off the UI thread via the injected TaskRunner; keep the failure
       banner; lock waits for or safely cancels a running backup
-- [ ] 23 CR-L8 `_prepare_change` must not read `self._session` on the worker thread: pass
+- [x] 23 CR-L8 `_prepare_change` must not read `self._session` on the worker thread: pass
       what it needs as arguments (it also copies `disk_digest` now)
 - [ ] 24 CR-L9 directory fsync failure after a successful replace: don't report "could not
       save" or undo the change; log the type and carry on
@@ -719,7 +719,7 @@ Group 6: cleanup (one commit each)
 - [ ] 30 split tests/test_vault_service.py and tests/ui/test_phase5_ui.py under ~300 lines;
       also split `ui/app_controller.py` (394 lines: move backup/export wiring out),
       `core/backup.py` (306: e.g. old-password helpers out) and
-      `core/vault_service.py` (305); flag `ui/main_window.py` (~300)
+      `core/vault_service.py` (319); flag `ui/main_window.py` (~300)
 - [ ] 31 move the §13 decision log to docs/DECISIONS.md with a pointer; add known/deferred:
       SEC-M4 (Qt 5.15.2 CVEs, plan PyQt6) and SEC-Low9 (log tracebacks contain full paths);
       README note that log files shouldn't be shared
