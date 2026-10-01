@@ -25,7 +25,7 @@ from typing import Any
 from vaultkeeper.config.constants import GamePreset
 from vaultkeeper.core.game_template import FieldKind, GameTemplate
 from vaultkeeper.core.models import Rank
-from vaultkeeper.core.text_validation import _BIDI_CONTROLS, strip_format_characters
+from vaultkeeper.core.text_validation import BIDI_CONTROLS, strip_format_characters
 
 MAX_PASTE = 5000
 _BOM = chr(0xFEFF)  # byte-order mark (invisible); chr() keeps this file ASCII-only
@@ -85,7 +85,7 @@ def _clean(text: str) -> str:
     """Limit size, unify newlines, drop control characters. NOT normalized (see ``_nfc``)."""
     text = text[:MAX_PASTE].replace("\r\n", "\n").replace("\r", "\n")
     return "".join(ch for ch in text if ch in "\n\t" or (
-        unicodedata.category(ch) != "Cc" and ch not in _BIDI_CONTROLS and ch != _BOM))
+        unicodedata.category(ch) != "Cc" and ch not in BIDI_CONTROLS and ch != _BOM))
 
 
 def _nfc(text: str) -> str:

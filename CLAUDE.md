@@ -724,7 +724,7 @@ Group 6 (in progress): cleanup (one commit each)
       DONE: removed all but split_tagged_id (used by split_name_and_tag). Reported to the
       user: kdf_needs_upgrade unused by the UI (upgrade prompt proposed, not built); pyotp
       unused (removal awaits the user's OK).
-- [ ] 27 make `_BIDI_CONTROLS` public, update importers
+- [x] 27 make `_BIDI_CONTROLS` public (now `BIDI_CONTROLS`), update importers
 - [ ] 28 Quick Add opens on the sidebar's selected game, else the last batch game
 - [ ] 29 cache the template-to-preset conversion in account_table.py
 - [ ] 30 split tests/test_vault_service.py and tests/ui/test_phase5_ui.py under ~300 lines;

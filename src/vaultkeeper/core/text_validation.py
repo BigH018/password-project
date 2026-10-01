@@ -23,7 +23,7 @@ from vaultkeeper.config import constants as c
 from vaultkeeper.errors import ValidationError
 
 # Bidi embedding/override/isolate characters can visually disguise text ("Trojan Source").
-_BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
 
@@ -42,7 +42,7 @@ def _check_characters(value: str, field: str, *, multiline: bool,
     allowed_controls = {"\n", "\t"} if multiline else set()
     for ch in value:
         category = unicodedata.category(ch)
-        if ch in _BIDI_CONTROLS or ch == "\ufeff" or (identity and category == "Cf"):
+        if ch in BIDI_CONTROLS or ch == "\ufeff" or (identity and category == "Cf"):
             raise ValidationError(field, "contains invisible formatting characters")
         if category == "Cs" or (category == "Cc" and ch not in allowed_controls):
             raise ValidationError(field, "contains control characters")
