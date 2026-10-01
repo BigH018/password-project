@@ -80,19 +80,6 @@ class PasteSuggestions:
     notes: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
-    def describe(self) -> list[str]:
-        """Human-readable list of what was found (secret values are never included)."""
-        names = {
-            "display_name": "name", "tag": "tag", "login_username": "username",
-            "password": "password", "email": "email", "email_password": "email password",
-            "recovery_email": "recovery email", "region": "region", "rank": "rank",
-            "status": "status", "notes": "notes",
-        }  # fmt: skip
-        found = [names.get(k, k) for k in self.fields]
-        if self.extra:
-            found.append(f"{len(self.extra)} extra field(s)")
-        return found
-
 
 def _clean(text: str) -> str:
     """Limit size, unify newlines, drop control characters. NOT normalized (see ``_nfc``)."""

@@ -161,13 +161,6 @@ def clean_game_name(value: Any) -> str:
     return clean_text(value, "game_name", c.MAX_GAME_NAME, required=True, identity=True)
 
 
-def clean_preset_key(value: Any) -> str:
-    """Preset key must be a known preset."""
-    if value not in c.PRESETS:
-        raise ValidationError("preset", "is not a known game preset")
-    return str(value)
-
-
 # --- Whole account ----------------------------------------------------------------------------
 
 

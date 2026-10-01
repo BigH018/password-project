@@ -100,14 +100,11 @@ def test_totp_secret() -> None:
             v.clean_totp_secret(bad)
 
 
-def test_uuid_and_preset_and_game_name() -> None:
+def test_uuid_and_game_name() -> None:
     with pytest.raises(ValidationError):
         t.clean_uuid("not-a-uuid", "id")
     with pytest.raises(ValidationError):
         t.clean_uuid("6F9619FF-8B86-D011-B42D-00C04FC964FF", "id")  # non-canonical case
-    assert v.clean_preset_key("overwatch") == "overwatch"
-    with pytest.raises(ValidationError):
-        v.clean_preset_key("fortnite")
     with pytest.raises(ValidationError):
         v.clean_game_name("  ")
 

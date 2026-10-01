@@ -35,12 +35,6 @@ class AccountFilter:
     tags: frozenset[str] = field(default_factory=frozenset)
     text: str = ""
 
-    @property
-    def is_empty(self) -> bool:
-        """True when the filter matches everything."""
-        return not (self.game_id or self.statuses or self.tiers or self.regions or self.tags
-                    or self.text.strip())
-
 
 def searchable_text(account: Account, searchable_ids: frozenset[str] = frozenset()) -> str:
     """Case-folded text that free-text search runs against (never includes secrets)."""

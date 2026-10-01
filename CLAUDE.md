@@ -701,7 +701,7 @@ Group 4 (done, pushed): input and key-derivation hardening
       and on lock; optional setting (off, Windows only, tested no-op elsewhere) for
       SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)
 
-Group 5 (done): small and deferred items
+Group 5 (done, pushed): small and deferred items
 - [x] 19 CR-L3 full paths required in backup/export dialogs; unreadable folders handled
       without "Something went wrong"; don't list the folder on every keystroke (debounce or
       on confirm)
@@ -716,11 +716,14 @@ Group 5 (done): small and deferred items
 - [x] 25 CR-L5 native file pickers aren't counted as activity / not closed by
       close_dialogs: try Qt's non-native dialogs; switch if reasonable, else report options
 
-Group 6: cleanup (one commit each)
-- [ ] 26 remove dead code: clean_preset_key, split_tagged_id (only if unused after 10),
+Group 6 (in progress): cleanup (one commit each)
+- [x] 26 remove dead code: clean_preset_key, split_tagged_id (only if unused after 10),
       PasteSuggestions.describe, ClipboardGuard.holds_copy, AccountFilter.is_empty,
       InactivityTracker.enabled, AccountForm._current_game. Report whether kdf_needs_upgrade
       is used (propose an upgrade prompt, don't build) and whether pyotp is still needed
+      DONE: removed all but split_tagged_id (used by split_name_and_tag). Reported to the
+      user: kdf_needs_upgrade unused by the UI (upgrade prompt proposed, not built); pyotp
+      unused (removal awaits the user's OK).
 - [ ] 27 make `_BIDI_CONTROLS` public, update importers
 - [ ] 28 Quick Add opens on the sidebar's selected game, else the last batch game
 - [ ] 29 cache the template-to-preset conversion in account_table.py

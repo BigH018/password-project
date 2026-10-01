@@ -54,9 +54,8 @@ def test_copy_then_auto_clear(setup: tuple[ClipboardGuard, FakeClipboard, list[F
     guard, board, timers = setup
     guard.copy("Fake-Passw0rd-1!")
     assert board.value == "Fake-Passw0rd-1!" and timers[0].seconds == 15
-    assert guard.holds_copy
     timers[0].fire()
-    assert board.value == "" and not guard.holds_copy
+    assert board.value == ""
 
 
 def test_does_not_clear_something_else(setup: tuple[ClipboardGuard, FakeClipboard,

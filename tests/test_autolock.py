@@ -44,12 +44,10 @@ def test_quick_add_override_and_restore() -> None:
     assert tracker.timeout == 300
 
 
-def test_disable_and_base_timeout_change() -> None:
+def test_base_timeout_change() -> None:
     clock = Clock()
     tracker = InactivityTracker(300, clock)
-    tracker.enabled = False
     clock.now += 10_000
-    assert not tracker.should_lock()
-    tracker.enabled = True
+    assert tracker.should_lock()
     tracker.set_base_timeout(20_000)
     assert not tracker.should_lock()

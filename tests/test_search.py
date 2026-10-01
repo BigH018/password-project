@@ -43,7 +43,6 @@ def _names(accounts: list[Account]) -> list[str]:
 
 
 def test_empty_filter_matches_all(pool: list[Account]) -> None:
-    assert AccountFilter().is_empty
     assert filter_accounts(pool, AccountFilter()) == pool
 
 
@@ -61,7 +60,6 @@ def test_empty_filter_matches_all(pool: list[Account]) -> None:
     ],
 )
 def test_criteria(pool: list[Account], flt: AccountFilter, expected: list[str]) -> None:
-    assert not flt.is_empty
     assert _names(filter_accounts(pool, flt)) == expected
 
 

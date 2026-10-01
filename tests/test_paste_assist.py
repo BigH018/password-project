@@ -126,13 +126,6 @@ def test_empty_and_garbage() -> None:
     assert suggest("::::\n=\n  \n", VAL).fields == {}
 
 
-def test_describe_never_includes_values() -> None:
-    s = suggest("pass: Fake-Passw0rd-1!\nemail: a@example.test", VAL)
-    text = " ".join(s.describe())
-    assert "password" in text and "email" in text
-    assert "Fake-Passw0rd-1!" not in text and "a@example.test" not in text
-
-
 # --- SEC-Low2: secrets are kept exactly as pasted (no NFC) ----------------------------------
 DECOMPOSED = "Fake-Pa" + "e" + chr(0x301) + "ssw0rd-1!"  # "e" + combining acute accent
 COMPOSED = "Fake-Pa" + chr(0xE9) + "ssw0rd-1!"

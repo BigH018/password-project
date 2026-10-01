@@ -51,11 +51,6 @@ class ClipboardGuard:
         self._copied: str | None = None
         self._pending: Cancellable | None = None
 
-    @property
-    def holds_copy(self) -> bool:
-        """Whether we have copied something that hasn't been cleared yet."""
-        return self._copied is not None
-
     def copy(self, text: str) -> None:
         """Copy ``text`` and (re)start the auto-clear timer."""
         self._cancel_timer()

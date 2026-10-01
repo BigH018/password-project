@@ -19,7 +19,6 @@ class InactivityTracker:
         self._base_timeout = timeout_seconds
         self._overrides: list[float] = []
         self._last_activity = clock()
-        self.enabled = True
 
     @property
     def timeout(self) -> float:
@@ -51,4 +50,4 @@ class InactivityTracker:
 
     def should_lock(self) -> bool:
         """True once the user has been idle for at least the current timeout."""
-        return self.enabled and self.seconds_idle() >= self.timeout
+        return self.seconds_idle() >= self.timeout

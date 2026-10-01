@@ -139,20 +139,17 @@ class AccountForm(QWidget):
         """The selected game (None while "Choose a game..." is showing)."""
         return self._games.get(self.game.currentData())
 
-    def _current_game(self) -> Game | None:
-        return self.current_game
-
     @property
     def has_game(self) -> bool:
         """Whether a real game (not the "Choose a game..." placeholder) is selected."""
-        return self._current_game() is not None
+        return self.current_game is not None
 
     def _game_changed(self) -> None:
         self._apply_template(keep_extra=self._extra_values())
         self.changed.emit()
 
     def _apply_template(self, keep_extra: dict[str, str], account: Account | None = None) -> None:
-        game = self._current_game()
+        game = self.current_game
         template = game.template if game else GameTemplate()
         self.region.setEnabled(game is not None)
         self.rank.setEnabled(game is not None)
