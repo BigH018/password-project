@@ -42,7 +42,7 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures, core/validation.py signatures | tests/test_paste_assist.py, test_entry_session.py |
 | Clipboard, auto-lock, session lock | security/*, ui/session_guard.py, ui/qt_adapters.py, ui/copy_actions.py | tests/test_clipboard.py, test_autolock.py, tests/ui/test_phase5_ui.py |
 | Backups, export | core/backup.py, core/exporter.py, storage/vault_file.py, ui/backup_dialog.py, ui/export_dialog.py | docs/VAULT_FORMAT.md, ui/app_controller.py (wiring) |
-| Password generator, TOTP | core/generator.py or core/totp.py, and the matching dialog | matching test file |
+| Password generator | core/generator.py, ui/generator_dialog.py | tests/test_generator.py |
 | Settings, paths, logging | config/*, ui/settings_dialog.py | |
 | Packaging, dependencies | packaging/, pyproject.toml, requirements*.txt | |
 | A failing test or bug | the failing test file and the module it tests | modules that one calls |
@@ -157,7 +157,6 @@ vaultkeeper/                       repo root
       entry_session.py             Quick Add batch state: sticky game/region/status + counter
       paste_assist.py              paste block -> field suggestions (pure, never saves)
       generator.py                 password generator (secrets only)
-      totp.py                 (P)  TOTP code + seconds remaining
     crypto/
       kdf.py                       Argon2id derivation + param bounds
       cipher.py                    AES-256-GCM via cryptography's AESGCM
@@ -228,7 +227,6 @@ vaultkeeper/                       repo root
     test_migrations.py             schema v1 -> v2 (incl. a real encrypted v1 vault)
     test_backup.py, test_exporter.py, test_clipboard.py, test_autolock.py, test_generator.py
     test_entry_session.py, test_paste_assist.py
-    test_totp.py                                                                       (P)
     ui/                            pytest-qt: test_qt_adapters, test_unlock_dialog (never-silent
                                    backup, no freeze, closable while busy), test_create_vault_dialog,
                                    test_change_password_dialog, test_main_window (real demo vault),
@@ -378,7 +376,7 @@ python -m vaultkeeper  # run the app
    with a pytest-qt test), main window, account dialog, game grouping, search.
 5. Clipboard auto-clear, auto-lock (+ session lock), password generator, **encrypted export and rotating backups**.
 6. Quick Add, batch mode, paste assist.
-7. TOTP (optional field).
+7. ~~TOTP~~ skipped by the user (2026-10-01).
 8. Polish: dark theme, settings dialog, error handling, PyInstaller .exe.
 
 ---
@@ -400,7 +398,8 @@ python -m vaultkeeper  # run the app
 - No extra fields for now (the schema is versioned).
 - Defaults: auto-lock 5 min, Quick Add inactivity 15 min, lock on minimize and on Windows
   session lock, clipboard clear 15 s. All configurable.
-- TOTP stays optional. The user accepts the same-vault trade-off.
+- TOTP: SKIPPED (user decision, 2026-10-01). `Account.totp_secret` stays in the model and
+  schema (validated, never shown in the UI). Don't build TOTP unless the user asks again.
 - Settings JSON lives in `%APPDATA%\VaultKeeper\` and holds no secrets.
 - Commit after each approved phase, with plain messages. Commits use the GitHub noreply
   address (repo-local `user.email`); earlier commits are left as they are.
@@ -473,5 +472,34 @@ python -m vaultkeeper  # run the app
   - [x] 4d: per-game templates (custom ranks/regions/fields/extra fields), Game setup, schema v2
 - [x] Phase 5: Clipboard, auto-lock, generator, export, backups
 - [x] Phase 6: Quick Add, batch mode, paste assist
-- [ ] Phase 7: TOTP
-- [ ] Phase 8: Polish + packaging
+- [x] Phase 6 committed 0838217 (NOT pushed yet; ask before pushing)
+- [-] Phase 7: TOTP (skipped by the user)
+- [ ] Phase 8: Polish + packaging (NEXT)
+
+### Next up: Phase 8 handoff (for a fresh session)
+Present a short plan list first and wait for the user's go, as with earlier phases.
+Scope agreed so far:
+1. Full dark theme in `ui/styles/dark.qss`, loaded at startup (replaces the interim
+   palette in `ui/theme.py`; keep the shared label styles working).
+2. Settings dialog (`ui/settings_dialog.py`): auto-lock minutes, Quick Add auto-lock
+   minutes, clipboard clear seconds, lock on minimize, lock on Windows session lock, and a
+   button to the existing Backups dialog. Save via `config/settings.py`; apply live via
+   `SessionGuard.apply_settings`.
+3. Remember window size/position (new non-secret settings field; settings JSON is
+   versioned, add with a default so old files still load).
+4. Error handling polish: a generic "something went wrong" dialog from the exception
+   hook (type/location logged, never messages), and friendly messages everywhere.
+5. Windows .exe with PyInstaller: `packaging/vaultkeeper.spec`, windowed (no console;
+   `app.py` already guards prints when stdout is None), bundle dark.qss. Antivirus false
+   positives are a known PyInstaller issue: mention, don't work around.
+Open items to mention to the user: confirm by hand that copied passwords don't appear in
+Win+V clipboard history (automated tests can't see the real Windows panel); optional
+column hiding was deferred to Phase 8 settings.
+
+### Practical notes for future sessions
+- The file-writing tool can turn `\uXXXX`/`\x..` escapes into raw characters: write such
+  characters with `chr(...)`, and run the tests (ASCII check) after writing.
+- Long multi-line patches through bash heredocs sometimes fail to parse: write a small
+  patch script to the scratchpad and run it instead.
+- Run the app with fake data: `.venv\Scripts\python -m vaultkeeper --demo`
+  (password `demo fake passphrase only`).
