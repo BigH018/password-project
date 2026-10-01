@@ -36,7 +36,7 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | Vault lifecycle (create, unlock, lock, change password) | core/vault_service.py, core/tasks.py, core/password_policy.py, errors.py, core/serialization.py | crypto/ signatures, storage/vault_file.py signatures, tests/test_vault_service.py, test_password_policy.py |
 | Accounts, games, search, duplicates | docs/DATA_MODEL.md, core/models.py, the relevant service (account_service, game_service or search), core/store.py, core/validation.py | core/text_validation.py, matching test file, tests/conftest.py (FakeStore) |
 | Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/serialization.py, config/constants.py, tests/test_serialization.py | grep ui/ for the field to see where it is displayed |
-| A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/theme.py, and signatures of the services it calls | ui/app_controller.py (screen flow), ui/qt_adapters.py, tests/ui_support.py, matching tests/ui file |
+| A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/theme.py, and signatures of the services it calls (main window: also ui/accounts_view.py) | ui/app_controller.py (screen flow), ui/qt_adapters.py, tests/ui_support.py, matching tests/ui file |
 | App startup, demo mode | app.py, demo.py, ui/app_controller.py | config/settings.py, config/logging_setup.py, tests/test_demo.py |
 | Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures, core/validation.py signatures | tests/test_paste_assist.py, test_entry_session.py |
 | Clipboard, auto-lock, session lock | security/*, ui/qt_adapters.py | tests/test_clipboard.py, test_autolock.py |
@@ -146,7 +146,7 @@ vaultkeeper/                       repo root
       vault_service.py             create/unlock/lock/save/change password; backup-safe save after .bak
       account_service.py           account CRUD + duplicate detection (warning only)
       game_service.py              add/rename/set preset/delete games (blocked if accounts exist)
-      search.py                    AccountFilter, free-text search (never secrets), rank sort key
+      search.py                    AccountFilter, free-text search (never secrets), facets, rank sort key
       backup.py               (P)  rotating encrypted backups + "backup now"
       exporter.py             (P)  encrypted export with its own password
       entry_session.py        (P)  Quick Add batch state: sticky fields + session counter
@@ -165,13 +165,15 @@ vaultkeeper/                       repo root
       autolock.py             (P)  inactivity logic, Quick Add timeout override (injected clock)
     ui/
       qt_adapters.py               QtTaskRunner (daemon threads, cancel_pending); later clipboard/timers
-      app_controller.py            screen flow: welcome -> create/unlock -> main; lock; quit
+      app_controller.py            screen flow: welcome -> create/unlock -> main; lock (closes dialogs); quit
       theme.py                     Fusion + dark palette, shared label styles (QSS in Phase 8)
       welcome_dialog.py            create new vault / open existing file
-      main_window.py               window: menus, backup banner, status bar (4a shell; table in 4b)
-      unlock_dialog.py             master password, busy state, explicit "Try the backup copy"
+      main_window.py               menus, toolbar, backup banner, status bar, delete; hosts AccountsPanel
+      accounts_view.py             AccountsPanel: game sidebar | search bar over sortable table
+      unlock_dialog.py             master password, busy state, explicit "Try the backup copy",
+                                   small "Open a different vault file..." link (restore / moved vault)
       create_vault_dialog.py       location + master password + confirm + strength hint
-      change_password_dialog.py (P) change master password
+      change_password_dialog.py    change master password (KDF off-thread, closable while busy)
       account_dialog.py       (P)  full add/edit form
       game_manager_dialog.py  (P)  add/rename/delete games
       quick_add_dialog.py     (P)  keyboard-first batch entry + paste box + duplicate warning
@@ -179,9 +181,9 @@ vaultkeeper/                       repo root
       generator_dialog.py     (P)  password generator UI
       messages.py                  generic error texts (error_text) + confirm/error boxes
       widgets/
-        account_table.py      (P)  table model + sort/filter proxy, masked secrets
-        game_sidebar.py       (P)  game list with counts
-        search_bar.py         (P)  free text + filter dropdowns
+        account_table.py           table model (passwords masked) + proxy sorting by ladder
+        game_sidebar.py            "All games" + games with counts
+        search_bar.py              free text + status/rank/region/label dropdowns -> AccountFilter
         rank_picker.py        (P)  tier + division combos driven by the game preset
         secret_field.py            masked edit with show/hide (copy button in Phase 5)
         strength_meter.py          live master-password strength bar + suggestions
@@ -209,7 +211,8 @@ vaultkeeper/                       repo root
     test_generator.py, test_entry_session.py, test_paste_assist.py, test_totp.py      (P)
     ui/                            pytest-qt: test_qt_adapters, test_unlock_dialog (never-silent
                                    backup, no freeze, closable while busy), test_create_vault_dialog,
-                                   test_shell (welcome + main window)
+                                   test_change_password_dialog, test_main_window (real demo vault),
+                                   test_shell (welcome, controller lock/demo details)
 ```
 
 ---
@@ -391,6 +394,12 @@ python -m vaultkeeper  # run the app
 - Phase 5: exports must use the `.vault` extension or live under `exports/` (both gitignored).
 - After unlocking from `.bak`, the next save renames the main file to `<vault>.damaged-<time>`
   and leaves `.bak` untouched (a damaged file never overwrites the good backup).
+- One vault is the normal case. "Create a new vault" is only offered on the first-run Welcome
+  screen. The unlock screen has a small "Open a different vault file..." link (for restoring a
+  backup or a moved vault) that opens a file picker directly.
+- Lock closes every open dialog (drafts discarded), cancels pending work, clears the window.
+- Delete key only deletes while the account table has focus. Edit has no keyboard shortcut
+  (rows open on double-click/Enter in 4c) so Enter in text fields is never hijacked.
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
   logs), deleted on exit; leftovers are swept at the next demo start. Real settings untouched.
 
@@ -402,7 +411,7 @@ python -m vaultkeeper  # run the app
       text_validation.py + validation.py)
 - [ ] Phase 4: Core UI
   - [x] 4a: foundation, welcome, create, unlock (+ backup offer/banner), task runner, shell, --demo
-  - [ ] 4b: full main window (sidebar, search, table, lock, change master password)
+  - [x] 4b: full main window (sidebar, search, table, lock, change master password)
   - [ ] 4c: account dialog, game manager
 - [ ] Phase 5: Clipboard, auto-lock, generator, export, backups
 - [ ] Phase 6: Quick Add, batch mode, paste assist

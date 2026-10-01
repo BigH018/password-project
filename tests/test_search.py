@@ -12,6 +12,7 @@ from vaultkeeper.core.models import Account, Game, Rank
 from vaultkeeper.core.search import (
     UNRANKED,
     AccountFilter,
+    facets,
     filter_accounts,
     matches,
     rank_label,
@@ -137,3 +138,22 @@ def test_filter_5000_accounts_fast() -> None:
     elapsed = time.perf_counter() - start
     assert result and all(matches(a, flt) for a in result)
     assert elapsed < 0.05, f"filtering took {elapsed:.3f}s"
+
+
+def test_facets_for_one_game_use_preset_order(pool: list[Account]) -> None:
+    f = facets(pool[:3], c.VALORANT)
+    assert f.tiers == c.VALORANT.tier_names and f.regions == c.VALORANT.regions
+    assert f.tags == ("main", "smurf")  # "Main"/"main" collapse, first spelling kept
+
+
+def test_facets_across_games_use_present_values(pool: list[Account]) -> None:
+    f = facets(pool)
+    assert f.tiers == ("Gold", "Radiant")
+    assert f.regions == ("EU", "Europe", "NA")
+
+
+def test_facets_free_text_preset_uses_present_values() -> None:
+    apex = make_game("Apex", "custom")
+    accounts = [make_account(apex, rank=Rank("Predator", None), region="NA West")]
+    f = facets(accounts, c.CUSTOM)
+    assert f.tiers == ("Predator",) and f.regions == ("NA West",)

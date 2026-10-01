@@ -9,13 +9,16 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, QStandardPaths
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QObject, QStandardPaths, QTimer
+from PyQt5.QtWidgets import QApplication, QDialog
 
 from vaultkeeper.config.constants import VAULT_EXTENSION
 from vaultkeeper.config.settings import Settings, save_settings, update_settings
+from vaultkeeper.core.account_service import AccountService
+from vaultkeeper.core.game_service import GameService
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import VaultIOError
+from vaultkeeper.ui.change_password_dialog import ChangePasswordDialog
 from vaultkeeper.ui.create_vault_dialog import CreateVaultDialog
 from vaultkeeper.ui.main_window import MainWindow
 from vaultkeeper.ui.qt_adapters import QtTaskRunner
@@ -53,6 +56,7 @@ class AppController(QObject):
         self.window = MainWindow(demo=demo)
         self.window.lock_requested.connect(self.lock)
         self.window.quit_requested.connect(self.quit)
+        self.window.change_password_requested.connect(self._change_password)
 
     # --- flow -------------------------------------------------------------------------------
 
@@ -101,26 +105,48 @@ class AppController(QObject):
         if dialog.exec_():
             self._remember_vault(self.service.path)
             self._show_unlocked()
-        elif dialog.wants_other_vault:
-            self.service = None
-            self._welcome()
+        elif dialog.other_vault_path is not None:
+            self.service = self._factory(dialog.other_vault_path)
+            self._unlock()
         else:
             self.quit()
 
     def _show_unlocked(self) -> None:
         if self.service is None:
             return
-        self.window.show_unlocked(str(self.service.path), self.service.opened_from_backup)
+        self.window.show_unlocked(
+            str(self.service.path),
+            self.service.opened_from_backup,
+            AccountService(self.service),
+            GameService(self.service),
+        )
 
     # --- actions ----------------------------------------------------------------------------
 
+    def _change_password(self) -> None:
+        if self.service is None or not self.service.is_unlocked:
+            return
+        dialog = ChangePasswordDialog(self.service, self._runner.cancel_pending, self.window)
+        if dialog.exec_():
+            self.window.banner.setVisible(self.service.opened_from_backup)
+            self.window.statusBar().showMessage("Master password changed.", 5000)
+
+    def close_dialogs(self) -> None:
+        """Close every open dialog (drafts are discarded: locking beats convenience)."""
+        for widget in QApplication.topLevelWidgets():
+            if isinstance(widget, QDialog) and widget.isVisible():
+                widget.reject()
+
     def lock(self) -> None:
-        """Drop decrypted state, clear the window, ask for the password again."""
+        """Close dialogs, drop decrypted state, clear the window, ask for the password again."""
+        self.close_dialogs()
+        self._runner.cancel_pending()
         if self.service is not None:
             self.service.lock()
         self.window.show_locked()
         if self.service is not None:
-            self._unlock()
+            # Deferred so any dialog event loops we just closed can unwind first.
+            QTimer.singleShot(0, self._unlock)
 
     def quit(self) -> None:
         """Lock (wiping keys) and leave the event loop. Running work is abandoned."""

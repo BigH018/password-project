@@ -161,8 +161,16 @@ def test_no_backup_offer_without_bak(qtbot: Any, vault_path: Path, make_qt_servi
     assert dialog.backup_button.isHidden()
 
 
-def test_other_vault_choice(qtbot: Any, existing_vault: Path, make_qt_service: Factory,
-                            qt_runner: QtTaskRunner) -> None:
-    dialog = _dialog(qtbot, make_qt_service(), qt_runner)
+def test_other_vault_file_link(qtbot: Any, existing_vault: Path, make_qt_service: Factory,
+                               qt_runner: QtTaskRunner, tmp_path: Path) -> None:
+    picks = ["", str(tmp_path / "restored.vault")]
+    dialog = UnlockDialog(make_qt_service(), qt_runner.cancel_pending,
+                          choose_file=lambda _p: picks.pop(0))
+    qtbot.addWidget(dialog)
+    dialog.show()
+    assert dialog.other_button.isFlat()  # low-key link, not a main button
+    dialog.other_button.click()  # picker cancelled
+    assert dialog.isVisible() and dialog.other_vault_path is None
     dialog.other_button.click()
-    assert dialog.wants_other_vault and dialog.result() == QDialog.Rejected
+    assert dialog.other_vault_path == tmp_path / "restored.vault"
+    assert dialog.result() == QDialog.Rejected

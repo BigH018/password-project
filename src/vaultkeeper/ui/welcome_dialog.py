@@ -13,7 +13,8 @@ from vaultkeeper.ui.theme import MUTED_STYLE
 FileChooser = Callable[[QWidget], str]
 
 
-def _choose_open_path(parent: QWidget) -> str:
+def choose_vault_file(parent: QWidget) -> str:
+    """Ask for an existing .vault file. Returns '' if cancelled."""
     path, _ = QFileDialog.getOpenFileName(
         parent, "Open a vault", "", f"Vault files (*{VAULT_EXTENSION})"
     )
@@ -24,7 +25,7 @@ class WelcomeDialog(QDialog):
     """After ``exec_()``: ``choice`` is ``"create"``, ``"open"`` (with ``path``) or None."""
 
     def __init__(
-        self, choose_file: FileChooser = _choose_open_path, parent: QWidget | None = None
+        self, choose_file: FileChooser = choose_vault_file, parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
         self._choose_file = choose_file

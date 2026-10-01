@@ -1,4 +1,4 @@
-"""Welcome dialog and the 4a main-window shell (banner, lock action, demo title)."""
+"""Welcome dialog, demo title, and controller details (demo create location)."""
 
 from __future__ import annotations
 
@@ -28,31 +28,6 @@ def test_welcome_open_and_cancelled_open(qtbot: Any, tmp_path: Path) -> None:
     qtbot.addWidget(chosen)
     chosen.open_button.click()
     assert chosen.choice == "open" and chosen.path == tmp_path / "a.vault"
-
-
-def test_main_window_locked_and_unlocked_states(qtbot: Any) -> None:
-    window = MainWindow()
-    qtbot.addWidget(window)
-    window.show()
-    assert window.banner.isHidden() and not window.lock_action.isEnabled()
-
-    window.show_unlocked("C:/fake/path.vault", opened_from_backup=False)
-    assert window.banner.isHidden() and window.lock_action.isEnabled()
-
-    window.show_unlocked("C:/fake/path.vault", opened_from_backup=True)
-    assert window.banner.isVisible()
-    assert "backup copy itself is not touched" in window.banner.text()
-
-    window.show_locked()
-    assert window.banner.isHidden() and window.placeholder.text() == "Locked"
-
-
-def test_lock_action_emits_signal(qtbot: Any) -> None:
-    window = MainWindow()
-    qtbot.addWidget(window)
-    window.show_unlocked("C:/fake/path.vault", opened_from_backup=False)
-    with qtbot.waitSignal(window.lock_requested, timeout=1000):
-        window.lock_action.trigger()
 
 
 def test_demo_title(qtbot: Any) -> None:
@@ -87,3 +62,25 @@ def test_demo_controller_suggests_new_vaults_inside_demo_folder(
     qtbot.addWidget(controller.window)
     controller._create()
     assert captured == [tmp_path / "new.vault"]
+
+
+def test_lock_closes_open_dialogs_and_clears_window(qtbot: Any, tmp_path: Path,
+                                                    monkeypatch: Any) -> None:
+    from vaultkeeper.config.settings import Settings
+    from vaultkeeper.ui import app_controller
+    from vaultkeeper.ui.qt_adapters import QtTaskRunner
+
+    reopened: list[bool] = []
+    monkeypatch.setattr(app_controller.AppController, "_unlock",
+                        lambda self: reopened.append(True))
+    controller = app_controller.AppController(
+        Settings(), tmp_path / "settings.json", QtTaskRunner(), lambda p: None,  # type: ignore[arg-type, return-value]
+    )
+    qtbot.addWidget(controller.window)
+    controller.service = None
+    draft = QDialog(controller.window)
+    draft.show()
+    assert draft.isVisible()
+    controller.lock()
+    assert not draft.isVisible()
+    assert controller.window.stack.currentWidget() is controller.window.locked_label

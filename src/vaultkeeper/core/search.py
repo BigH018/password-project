@@ -80,6 +80,35 @@ def filter_accounts(accounts: Iterable[Account], flt: AccountFilter) -> list[Acc
     return [a for a in accounts if matches(a, flt)]
 
 
+@dataclass(frozen=True, slots=True)
+class Facets:
+    """Distinct values present in a set of accounts, for filter dropdowns (sorted)."""
+
+    tiers: tuple[str, ...]
+    regions: tuple[str, ...]
+    tags: tuple[str, ...]
+
+
+def facets(accounts: Iterable[Account], preset: GamePreset | None = None) -> Facets:
+    """Values to offer in the filter dropdowns.
+
+    With a fixed-ladder ``preset`` (one game selected), tiers and regions come from the
+    preset in ladder order. Otherwise they are the distinct values present, sorted. Tags are
+    always the labels present (case-insensitively distinct, first spelling kept).
+    """
+    accounts = list(accounts)
+    tags: dict[str, str] = {}
+    for account in accounts:
+        for tag in account.tags:
+            tags.setdefault(tag.casefold(), tag)
+    if preset is not None and not preset.free_text:
+        tiers, regions = preset.tier_names, preset.regions
+    else:
+        tiers = tuple(sorted({a.rank.tier for a in accounts if a.rank.tier}, key=str.casefold))
+        regions = tuple(sorted({a.region for a in accounts if a.region}, key=str.casefold))
+    return Facets(tiers, regions, tuple(sorted(tags.values(), key=str.casefold)))
+
+
 def rank_sort_key(account: Account, preset: GamePreset) -> tuple[int, int, int, str]:
     """Sort key ordering accounts from lowest to highest rank within a preset's ladder.
 

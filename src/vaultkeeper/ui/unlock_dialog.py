@@ -8,6 +8,7 @@ result (``cancel_pending``).
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 
 from PyQt5.QtGui import QCloseEvent
 from PyQt5.QtWidgets import (
@@ -24,6 +25,7 @@ from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import VaultAuthError, VaultFormatError
 from vaultkeeper.ui.messages import error_text
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
+from vaultkeeper.ui.welcome_dialog import FileChooser, choose_vault_file
 from vaultkeeper.ui.widgets.secret_field import SecretField
 
 BACKUP_EXPLANATION = (
@@ -33,20 +35,25 @@ BACKUP_EXPLANATION = (
 
 
 class UnlockDialog(QDialog):
-    """Accepts once the vault is unlocked. ``wants_other_vault`` is set if the user asks to
-    open a different file instead."""
+    """Accepts once the vault is unlocked.
+
+    If the user picks a different vault file instead (small link at the bottom, for restoring
+    a backup or a moved vault), the dialog rejects with ``other_vault_path`` set.
+    """
 
     def __init__(
         self,
         service: VaultService,
         cancel_pending: Callable[[], None],
+        choose_file: FileChooser = choose_vault_file,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._service = service
         self._cancel_pending = cancel_pending
+        self._choose_file = choose_file
         self._busy = False
-        self.wants_other_vault = False
+        self.other_vault_path: Path | None = None
         self.setWindowTitle("Unlock VaultKeeper")
         self.setMinimumWidth(440)
 
@@ -70,16 +77,20 @@ class UnlockDialog(QDialog):
         self.backup_button.hide()
         self.backup_note.hide()
 
-        self.other_button = QPushButton("Open a different vault...", self)
+        self.other_button = QPushButton("Open a different vault file...", self)
+        self.other_button.setFlat(True)  # deliberately low-key: one vault is the normal case
+        self.other_button.setStyleSheet(MUTED_STYLE + " text-decoration: underline;")
         self.unlock_button = QPushButton("Unlock", self)
         self.unlock_button.setDefault(True)
         self.quit_button = QPushButton("Quit", self)
 
         buttons = QHBoxLayout()
-        buttons.addWidget(self.other_button)
         buttons.addStretch(1)
         buttons.addWidget(self.quit_button)
         buttons.addWidget(self.unlock_button)
+        footer = QHBoxLayout()
+        footer.addWidget(self.other_button)
+        footer.addStretch(1)
 
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Enter your master password to unlock the vault.", self))
@@ -90,6 +101,7 @@ class UnlockDialog(QDialog):
         layout.addWidget(self.backup_button)
         layout.addWidget(self.backup_note)
         layout.addLayout(buttons)
+        layout.addLayout(footer)
 
         self.unlock_button.clicked.connect(lambda: self._start(use_backup=False))
         self.password.returnPressed.connect(lambda: self._start(use_backup=False))
@@ -141,8 +153,10 @@ class UnlockDialog(QDialog):
         self.password.setFocus()
 
     def _choose_other(self) -> None:
-        self.wants_other_vault = True
-        self.reject()
+        chosen = self._choose_file(self)
+        if chosen:  # cancelled picker: stay on this screen
+            self.other_vault_path = Path(chosen)
+            self.reject()
 
     # --- closing during work discards the result ------------------------------------------
 
