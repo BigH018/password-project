@@ -507,3 +507,20 @@ def test_change_still_works_without_interference(make_service: Factory) -> None:
     assert done == [True]
     svc.lock()
     make_service().unlock(OTHER_MASTER)
+
+
+def test_dir_sync_failure_does_not_undo_a_save(make_service: Factory, vault_path: Path,
+                                               monkeypatch: pytest.MonkeyPatch) -> None:
+    """CR-L9: the new file is in place, so the save must count (no rollback in memory)."""
+    svc = make_service()
+    svc.create(MASTER)
+
+    def fail(_directory: Path) -> None:
+        raise OSError("directory sync not supported here")
+
+    monkeypatch.setattr(vault_file, "_fsync_dir", fail)
+    _populate(svc)  # saves; must not raise
+    svc.lock()
+    reopened = make_service()
+    reopened.unlock(MASTER)
+    assert len(reopened.data.accounts) == 1

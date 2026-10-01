@@ -113,7 +113,8 @@ newer versions. Migrations live in `core/migrations.py` as `migrate_vN_to_vN+1`,
    the JSON payload. If anything fails, delete the tmp file, raise, and leave the vault untouched.
 3. If `<vault>` exists: copy it to `<vault>.bak.tmp`, fsync, then `os.replace` it to `<vault>.bak`.
 4. `os.replace(<vault>.tmp, <vault>)` (atomic within one volume on NTFS and POSIX).
-5. On POSIX, fsync the directory. On startup, remove stale `.tmp` files left by earlier crashes.
+5. On POSIX, fsync the directory (if that fails, the new file is already in place: the error type
+   is logged and the save still counts). On startup, remove stale `.tmp` files left by earlier crashes.
 6. If the main file fails to open, the UI *offers* to try `.bak`. It never switches silently.
    Before step 3, `vault_service` checks that the current main file still decrypts with the
    session key (the old key during a password change). If it doesn't (damaged on disk while

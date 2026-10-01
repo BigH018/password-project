@@ -326,3 +326,42 @@ def test_shared_folder_heuristic_on_windows(vault: str, shared: bool) -> None:
 def test_shared_folder_heuristic_on_posix(tmp_path: Path, mode: int, shared: bool) -> None:
     assert vf.folder_may_be_shared(tmp_path / "fake.vault", platform="linux",
                                    mode_of=lambda _p: mode) is shared
+
+
+# --- CR-L9: a failed directory sync after a successful replace is not a failed save --------
+
+
+def _failing_dir_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(_directory: Path) -> None:
+        raise OSError("directory sync not supported here")
+
+    monkeypatch.setattr(vf, "_fsync_dir", fail)
+
+
+def test_dir_sync_failure_after_replace_still_counts_as_saved(
+    existing: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    _failing_dir_sync(monkeypatch)
+    with caplog.at_level("WARNING"):
+        vf.write_vault_atomic(existing, NEW, ok)  # no "could not save"
+    assert existing.read_bytes() == NEW and vf.backup_path(existing).read_bytes() == OLD
+    assert _leftovers(existing) == []
+    assert "(OSError)" in caplog.text and str(existing.parent) not in caplog.text
+
+
+def test_dir_sync_failure_after_replace_keeps_quarantine_copy(
+    existing: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = _quarantine_setup(existing)
+    _failing_dir_sync(monkeypatch)
+    vf.write_vault_atomic(existing, NEW, ok, quarantine_as=target)
+    assert existing.read_bytes() == NEW and target.read_bytes() == b"second"
+
+
+def test_dir_sync_failure_after_copy_still_counts_as_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _failing_dir_sync(monkeypatch)
+    target = tmp_path / "backups" / "fake-backup.vault"
+    vf.write_bytes_atomic(target, NEW, ok)
+    assert target.read_bytes() == NEW

@@ -15,6 +15,7 @@ only handles bytes: it knows nothing about keys or accounts.
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import shutil
 import stat
@@ -24,6 +25,8 @@ from collections.abc import Callable
 from pathlib import Path, PurePath, PureWindowsPath
 
 from vaultkeeper.errors import VaultFormatError, VaultIOError, VaultKeeperError
+
+log = logging.getLogger(__name__)
 
 MAX_VAULT_BYTES = 64 * 1024 * 1024
 REPLACE_RETRIES = 5
@@ -95,6 +98,15 @@ def _replace(src: Path, dst: Path) -> None:
             time.sleep(REPLACE_RETRY_DELAY)
 
 
+def _sync_dir_after_replace(directory: Path) -> None:
+    """Make the rename durable (POSIX). The new file is already in place, so a failure here
+    is logged and ignored: reporting "could not save" would undo a save that worked (CR-L9)."""
+    try:
+        _fsync_dir(directory)
+    except OSError as exc:
+        log.warning("Directory sync after saving failed (%s)", type(exc).__name__)
+
+
 def _fsync_dir(directory: Path) -> None:
     if sys.platform == "win32":
         return  # not supported on Windows; NTFS metadata journaling covers the rename
@@ -164,7 +176,7 @@ def write_vault_atomic(
             quarantined = quarantine_as
         _replace(tmp, path)
         quarantined = None  # the new vault is in place: the damaged copy must stay
-        _fsync_dir(path.parent)
+        _sync_dir_after_replace(path.parent)
     except OSError as exc:
         _undo_failed_write(path, quarantined)
         raise VaultIOError("Could not save the vault file.") from exc
@@ -245,7 +257,7 @@ def write_bytes_atomic(path: Path, data: bytes, verify: Verifier) -> None:
             raise VaultIOError("The written file failed verification; nothing was changed.") \
                 from exc
         _replace(tmp, path)
-        _fsync_dir(path.parent)
+        _sync_dir_after_replace(path.parent)
     except OSError as exc:
         _remove_quietly(tmp)
         raise VaultIOError("Could not write the file.") from exc

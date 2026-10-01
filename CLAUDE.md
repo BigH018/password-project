@@ -703,7 +703,7 @@ Group 5 (in progress): small and deferred items
       banner; lock waits for or safely cancels a running backup
 - [x] 23 CR-L8 `_prepare_change` must not read `self._session` on the worker thread: pass
       what it needs as arguments (it also copies `disk_digest` now)
-- [ ] 24 CR-L9 directory fsync failure after a successful replace: don't report "could not
+- [x] 24 CR-L9 directory fsync failure after a successful replace: don't report "could not
       save" or undo the change; log the type and carry on
 - [ ] 25 CR-L5 native file pickers aren't counted as activity / not closed by
       close_dialogs: try Qt's non-native dialogs; switch if reasonable, else report options
