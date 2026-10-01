@@ -46,9 +46,8 @@ encrypted file on your own PC. No cloud, no sync, no network: ever.
 
 ## Why this exists
 
-General-purpose password managers are built around websites. A gamer with 150+ alt accounts
-(around 70 Valorant, 30 Marvel Rivals, 20 Overwatch and more) needs something different:
-accounts grouped by **game**, with each game's own **ranks**, **regions** and **statuses**
+General-purpose password managers are built around websites. A gamer with a large number of
+accounts across several games needs something different: accounts grouped by **game**, with each game's own **ranks**, **regions** and **statuses**
 (active, banned, locked, retired), and a way to enter a lot of accounts **fast, by keyboard
 alone**.
 
@@ -379,7 +378,7 @@ your master password. Keeping one on a separate physical drive is still recommen
 
 Released under the [MIT License](LICENSE). Copyright (c) 2026 BigH.
 
-The app icon artwork (`packaging/icon_source.jpg` and the icons made from it) is **not**
+The app icon artwork (the files in `packaging/` and the icons made from them) is **not**
 covered by the MIT license. All rights remain with its original artist.
 
 Provided "as is", without warranty of any kind. You are responsible for keeping your master

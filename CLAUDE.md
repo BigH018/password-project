@@ -56,14 +56,14 @@ worse than none.
 
 ## 1. Purpose and use case
 
-VaultKeeper is a **local-only desktop password manager** for a gamer with 150+ alt accounts
-(~70 Valorant, ~30 Marvel Rivals, ~20 Overwatch, plus others). It is a password manager
+VaultKeeper is a **local-only desktop password manager** for a gamer with a large
+number of accounts across several games (Valorant, Marvel Rivals, Overwatch and others). It is a password manager
 **organized around games**.
 
 - Python 3.11+, PyQt5, **fully offline**. The app makes NO network calls, ever.
 - One encrypted vault file on the user's PC. Reopen, enter the master password, and everything comes back.
 - Windows first. Stay cross-platform where it costs nothing.
-- ~150 accounts will be entered **by hand**, so fast keyboard-only entry is a top priority.
+- Many accounts will be entered **by hand**, so fast keyboard-only entry is a top priority.
 - **Out of scope:** auto-typing into launchers, importers or parsers for old text files,
   plaintext export of any kind, sync/cloud, or anything that needs a network.
 
@@ -127,8 +127,10 @@ vaultkeeper/                       repo root
     recover_vault.py               standalone decrypt-to-stdout (cryptography + argon2-cffi only)
   packaging/
     vaultkeeper.spec          (P)  PyInstaller spec (phase 8)
-    icon_source.jpg                the user's 1920px icon art (app_icon.ico + docs/images/icon.png
-                                   are built from it; third-party art, not MIT: see README)
+    icon_source_32px.ico           the user's 32px icon: app_icon.ico is built from it (crisp
+                                   pixel upscale to 16-256px; the app uses only the .ico)
+    icon_source.jpg                the user's 1920px icon art, used only for docs/images/icon.png
+                                   (README). Third-party art, not MIT: see README
   src/vaultkeeper/
     __init__.py                    version string only
     __main__.py                    `python -m vaultkeeper` -> main.main()
@@ -223,7 +225,7 @@ vaultkeeper/                       repo root
       styles/
         dark.qss                   dark theme (ASCII, no url()/images; package data)
       assets/
-        app_icon.ico               16-256px icon (smooth downscale of the source; package data)
+        app_icon.ico               16-256px icon built from icon_source_32px.ico (package data)
   tests/
     conftest.py                    fast KDF params, network block (autouse), FakeStore, fixtures
     ui_support.py                  pytest plugin: off-screen Qt, QtTaskRunner, Gate (blocking KDF),
