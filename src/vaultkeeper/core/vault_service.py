@@ -16,6 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from vaultkeeper.core import vault_disk
 from vaultkeeper.core.models import VaultData, utc_now_iso
 from vaultkeeper.core.password_policy import check_master_password
 from vaultkeeper.core.serialization import dumps_payload, loads_payload
@@ -32,7 +33,6 @@ from vaultkeeper.crypto.kdf import (
 )
 from vaultkeeper.errors import (
     VaultAuthError,
-    VaultFormatError,
     VaultIOError,
     VaultKeeperError,
     VaultLockedError,
@@ -54,6 +54,7 @@ class _Session:
     kdf: KdfParams
     data: VaultData
     from_backup: bool = False
+    disk_digest: bytes | None = None  # SHA-256 of the file bytes we last read or wrote
 
 
 class VaultService:
@@ -150,7 +151,8 @@ class VaultService:
         except BaseException:
             wipe(key)
             raise
-        return _Session(key, hdr.salt, hdr.kdf, data, from_backup=use_backup)
+        on_disk = None if use_backup else vault_disk.digest(blob)
+        return _Session(key, hdr.salt, hdr.kdf, data, from_backup=use_backup, disk_digest=on_disk)
 
     def _prepare_change(self, current: str, new: str) -> _Session:
         session = self._require_session()
@@ -165,7 +167,7 @@ class VaultService:
             raise VaultAuthError()
         salt = new_salt()
         key = self._kdf(new, salt, self._kdf_params)
-        return _Session(key, salt, self._kdf_params, session.data)
+        return _Session(key, salt, self._kdf_params, session.data, disk_digest=session.disk_digest)
 
     # --- commit steps (caller's thread) -----------------------------------------------------
 
@@ -273,16 +275,20 @@ class VaultService:
     # --- writing ----------------------------------------------------------------------------
 
     def _write(self, session: _Session) -> None:
-        """Seal and write. A damaged main file (we opened from ``.bak``, or it no longer
-        decrypts) is copied aside instead of over the good ``.bak``. If the write fails, the
-        next save retries."""
+        """Seal and write after checking the file on disk (``core/vault_disk.py``): a damaged
+        main file is copied aside instead of over the good ``.bak``, and a file changed by
+        another writer is never overwritten (VaultConflictError). A failed write is retried
+        by the next save."""
         blob = envelope.seal(dumps_payload(session.data), session.key, session.kdf, session.salt)
+        current = self._session  # during a password change: the old session, as on disk
         quarantine = None
-        if self._path.exists() and (self._opened_from_backup or not self._main_file_ok()):
-            quarantine = vault_file.damaged_path(self._path)
+        if current is not None:
+            quarantine = vault_disk.quarantine_target(
+                self._path, current.key, current.disk_digest, self._opened_from_backup)
         vault_file.write_vault_atomic(
-            self._path, blob, self._verifier(session.key), quarantine_as=quarantine
+            self._path, blob, vault_disk.verifier(session.key), quarantine_as=quarantine
         )
+        session.disk_digest = vault_disk.digest(blob)
         if quarantine is not None:
             self.last_damaged_copy = quarantine
             log.warning("Damaged vault file kept aside; backup left untouched")
@@ -292,24 +298,3 @@ class VaultService:
                 listener()
             except Exception:  # a listener must never break saving
                 log.exception("Save listener failed")
-
-    def _main_file_ok(self) -> bool:
-        """Whether the file on disk still decrypts with the CURRENT session key (during a
-        password change that is still the old key). False = damaged: keep it out of .bak."""
-        if self._session is None:
-            return True  # creating: nothing of ours on disk yet
-        try:
-            self._verifier(self._session.key)(vault_file.read_vault_bytes(self._path))
-        except (VaultAuthError, VaultFormatError):
-            log.warning("Vault file on disk no longer decrypts; keeping it out of .bak")
-            return False
-        return True
-
-    @staticmethod
-    def _verifier(key: bytearray) -> Callable[[bytes], None]:
-        def verify(written: bytes) -> None:
-            _hdr, plaintext = envelope.open_with_key(written, key, FileKind.VAULT)
-            loads_payload(plaintext)
-
-        return verify
-

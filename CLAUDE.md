@@ -33,7 +33,7 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | Task type | Read first | Read only if needed |
 |---|---|---|
 | Crypto, KDF, vault format | docs/VAULT_FORMAT.md, crypto/*, storage/vault_file.py, errors.py | scripts/recover_vault.py (must stay in sync with the format); tests/test_header, test_kdf, test_cipher, test_envelope, test_vault_file, test_recover_script |
-| Vault lifecycle (create, unlock, lock, change password) | core/vault_service.py, core/tasks.py, core/password_policy.py, errors.py, core/serialization.py | crypto/ signatures, storage/vault_file.py signatures, tests/test_vault_service.py, test_password_policy.py |
+| Vault lifecycle (create, unlock, lock, change password) | core/vault_service.py, core/vault_disk.py, core/tasks.py, core/password_policy.py, errors.py, core/serialization.py | crypto/ signatures, storage/vault_file.py signatures, tests/test_vault_service.py, test_vault_disk.py, test_password_policy.py |
 | Accounts, games, search, duplicates | docs/DATA_MODEL.md, core/models.py, core/game_template.py, the relevant service (account_service, game_service or search), core/store.py, core/validation.py | core/text_validation.py, matching test file, tests/conftest.py (FakeStore) |
 | Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/game_template.py, core/serialization.py, core/template_codec.py, core/migrations.py, tests/test_serialization.py, tests/test_migrations.py | grep ui/ for the field to see where it is displayed |
 | A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/safe_text.py, ui/theme.py, and signatures of the services it calls (main window: also ui/accounts_view.py) | ui/app_controller.py (screen flow), ui/qt_adapters.py, tests/ui_support.py, matching tests/ui file |
@@ -160,6 +160,8 @@ vaultkeeper/                       repo root
       tasks.py                     TaskRunner protocol + InlineTaskRunner
       vault_service.py             create/unlock/lock/save/change password; backup-safe save after
                                    .bak; on_saved listeners (backups)
+      vault_disk.py                file on disk vs session: digest, verifier, quarantine_target
+                                   (damaged -> .damaged copy; changed elsewhere -> VaultConflictError)
       account_service.py           account CRUD + duplicate detection (warning only)
       game_service.py              add (starter/template) / rename / set_template (never blocked) / delete
       search.py                    AccountFilter, free-text search (never secrets), facets, rank sort key
@@ -182,13 +184,15 @@ vaultkeeper/                       repo root
       autolock.py                  InactivityTracker: timeout, Quick Add override (injected clock)
     ui/
       qt_adapters.py               QtTaskRunner, QtClipboardBackend (Win+V exclusion), qt_schedule,
-                                   ActivityFilter, SessionLockWatcher (Windows lock via ctypes)
+                                   ActivityFilter, SessionLockWatcher (Windows lock via ctypes),
+                                   VaultInstanceLock (QLockFile <vault>.lock, stale after a crash)
       session_guard.py             ClipboardGuard + auto-lock wiring; emits lock_needed(reason)
       copy_actions.py              copy actions (Ctrl+B/C/E on the table) + right-click menu
       backup_dialog.py             backup folder / keep N / interval + Backup now;
                                    after_password_change (offer to delete old-password backups)
       export_dialog.py             encrypted export (own password; cancel writes nothing)
-      app_controller.py            screen flow: welcome -> create/unlock -> main; lock (closes dialogs); quit
+      app_controller.py            screen flow: welcome -> create/unlock -> main; lock (closes dialogs); quit;
+                                   holds the vault's instance lock from the unlock prompt until quit
       branding.py                  app icon (all .ico sizes) on every window, Windows taskbar
                                    AppUserModelID, no "?" help button on dialogs
       theme.py                     Fusion + dark palette + styles/dark.qss (fallback: palette
@@ -251,6 +255,7 @@ vaultkeeper/                       repo root
     test_logging_setup.py          redaction, exceptions logged without messages, on_error notice
     test_header.py, test_kdf.py, test_cipher.py, test_envelope.py, test_vault_file.py
     test_vault_service.py, test_password_policy.py, test_recover_script.py
+    test_vault_disk.py             save refused if the file changed on disk (second instance)
     test_accounts.py, test_games.py, test_search.py
     test_demo.py                   demo stays in temp, fake data only, cleaned up (even with open logs)
     test_templates.py              templates: presets, codec, validation, extra values, secret search
@@ -355,7 +360,8 @@ account data. Duplicate check is a warning only: same game and the same login or
 - All exceptions inherit `vaultkeeper.errors.VaultKeeperError`: `VaultFormatError`,
   `VaultAuthError` (wrong password **or** tamper, deliberately the same), `VaultLockedError`,
   `VaultIOError`, `ValidationError` (field name, never the value), `WeakPasswordError`,
-  `NotFoundError`, `DuplicateGameError`, `GameInUseError`.
+  `NotFoundError`, `DuplicateGameError`, `GameInUseError`, `VaultConflictError` (file changed
+  on disk since it was loaded; save refused).
 - Translate library exceptions at layer boundaries. Use `from None` when chaining could leak data.
 - The UI shows generic text via `ui/messages.py`. Unexpected errors go to a top-level hook
   that logs type and location only, then `ui/error_dialog.py` shows a generic notice (the
@@ -441,6 +447,10 @@ python -m vaultkeeper  # run the app
 - After a master-password change (CR-M1/SEC-M1): `.bak` is re-saved under the new password,
   a backup is made at once, and the user is offered to delete backups that still open with the
   old password (found by header salt; only offered once a new-password backup exists).
+- Two running copies (SEC-M2): the controller takes `<vault>.lock` (QLockFile, stale only when
+  the owner process is gone) before the unlock prompt and keeps it until quit; a second copy
+  gets "already open" and the welcome screen. Backstop: a save is refused
+  (VaultConflictError) if the file changed on disk since it was read or written (SHA-256).
 - Backup failures (CR-H2) are logged by error type only and shown as a banner ("Last backup
   failed at <time>") until a backup succeeds. The last success/failure times are kept in
   settings, so a failure at lock or exit shows after the next unlock.

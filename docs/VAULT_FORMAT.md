@@ -112,6 +112,11 @@ newer versions. Migrations live in `core/migrations.py` as `migrate_vN_to_vN+1`,
    session key (the old key during a password change). If it doesn't (damaged on disk while
    unlocked), step 7's quarantine is used instead, so a damaged file never becomes `.bak`
    (test: `test_save_never_rotates_a_damaged_main_file_into_bak`).
+   The service also remembers the SHA-256 of the bytes it last read or wrote. If the main
+   file changed but still decrypts with the key, another window or program saved it: the
+   save is refused with `VaultConflictError` and nothing is written (`core/vault_disk.py`,
+   `tests/test_vault_disk.py`). The UI also holds `<vault>.lock` (QLockFile) so a second
+   running copy can't open the same vault.
 7. **After opening from `.bak`**, the next save does NOT do step 3. Instead the current
    (damaged) main file is COPIED (exclusive create + fsync, never overwriting) to
    `<vault>.damaged-YYYYMMDD-HHMMSS` (`quarantine_as`), so the good `.bak` is never

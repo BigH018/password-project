@@ -66,3 +66,16 @@ class DuplicateGameError(VaultKeeperError):
 
 class GameInUseError(VaultKeeperError):
     """A game cannot be deleted while accounts still reference it."""
+
+
+class VaultConflictError(VaultKeeperError):
+    """The vault file changed on disk since it was loaded (another window or program).
+
+    Saving is refused so neither version is silently lost.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "The vault file was changed by another program or Account Manager window since "
+            "you unlocked it, so nothing was saved. Lock and unlock to load the latest version."
+        )

@@ -84,3 +84,74 @@ def test_lock_closes_open_dialogs_and_clears_window(qtbot: Any, tmp_path: Path,
     controller.lock()
     assert not draft.isVisible()
     assert controller.window.stack.currentWidget() is controller.window.locked_label
+
+
+# --- SEC-M2: a vault open in another running copy is not opened again --------------------
+
+
+def _start_controller(qtbot: Any, tmp_path: Path, monkeypatch: Any) -> tuple[Any, list[str]]:
+    from conftest import FAST_KDF, MASTER
+    from vaultkeeper.config.settings import Settings
+    from vaultkeeper.core.vault_service import VaultService
+    from vaultkeeper.ui import app_controller, messages
+    from vaultkeeper.ui.qt_adapters import QtTaskRunner
+
+    vault = tmp_path / "fake.vault"
+    VaultService(vault, kdf_params=FAST_KDF).create(MASTER)
+    events: list[str] = []
+
+    class FakeUnlock:
+        def __init__(self, service: VaultService, *_a: Any, **_k: Any) -> None:
+            self.service, self.other_vault_path = service, None
+            events.append("unlock prompt")
+
+        def exec_(self) -> int:
+            self.service.unlock(MASTER)
+            return 1
+
+    class FakeWelcome:
+        def __init__(self, *_a: Any, **_k: Any) -> None:
+            self.choice, self.path = None, None
+            events.append("welcome")
+
+        def exec_(self) -> int:
+            return 0
+
+    monkeypatch.setattr(app_controller, "UnlockDialog", FakeUnlock)
+    monkeypatch.setattr(app_controller, "WelcomeDialog", FakeWelcome)
+    monkeypatch.setattr(messages, "show_error",
+                        lambda _p, title, text: events.append(f"error: {text}"))
+    controller = app_controller.AppController(
+        Settings(vault_path=str(vault)), tmp_path / "settings.json", QtTaskRunner(),
+        lambda p: VaultService(p, kdf_params=FAST_KDF))
+    qtbot.addWidget(controller.window)
+    return controller, events
+
+
+def test_vault_open_elsewhere_is_refused_before_the_password(qtbot: Any, tmp_path: Path,
+                                                             monkeypatch: Any) -> None:
+    from vaultkeeper.ui.qt_adapters import VaultInstanceLock
+
+    other_copy = VaultInstanceLock()
+    assert other_copy.acquire(tmp_path / "fake.vault")
+    controller, events = _start_controller(qtbot, tmp_path, monkeypatch)
+    controller.start()
+    assert "unlock prompt" not in events
+    assert any(e.startswith("error: ") and "already open" in e for e in events)
+    assert events[-1] == "welcome"
+    assert controller.service is None
+    other_copy.release()
+
+
+def test_lock_file_held_while_open_and_released_on_quit(qtbot: Any, tmp_path: Path,
+                                                        monkeypatch: Any) -> None:
+    from vaultkeeper.ui.qt_adapters import VaultInstanceLock
+
+    controller, events = _start_controller(qtbot, tmp_path, monkeypatch)
+    controller.start()
+    assert events == ["unlock prompt"] and controller.service.is_unlocked
+    assert not VaultInstanceLock().acquire(tmp_path / "fake.vault")  # another copy can't
+    controller.quit()
+    probe = VaultInstanceLock()
+    assert probe.acquire(tmp_path / "fake.vault")
+    probe.release()

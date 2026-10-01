@@ -21,13 +21,14 @@ from vaultkeeper.core.game_service import GameService
 from vaultkeeper.core.serialization import dumps_payload
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import VaultKeeperError
+from vaultkeeper.ui import messages
 from vaultkeeper.ui.backup_dialog import BackupDialog, after_password_change
 from vaultkeeper.ui.change_password_dialog import ChangePasswordDialog
 from vaultkeeper.ui.create_vault_dialog import CreateVaultDialog
 from vaultkeeper.ui.export_dialog import ExportDialog
 from vaultkeeper.ui.main_window import MainWindow
 from vaultkeeper.ui.messages import error_text
-from vaultkeeper.ui.qt_adapters import QtTaskRunner
+from vaultkeeper.ui.qt_adapters import QtTaskRunner, VaultInstanceLock
 from vaultkeeper.ui.session_guard import SessionGuard
 from vaultkeeper.ui.settings_dialog import SettingsDialog
 from vaultkeeper.ui.unlock_dialog import UnlockDialog
@@ -40,6 +41,10 @@ def default_vault_path() -> Path:
     """Suggested location for a new vault: Documents/VaultKeeper/vaultkeeper.vault."""
     docs = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation) or str(Path.home())
     return Path(docs) / "VaultKeeper" / f"vaultkeeper{VAULT_EXTENSION}"
+
+
+ALREADY_OPEN = ("This vault is already open in another Account Manager window. Use that "
+                "window, or close it first and then open the vault here.")
 
 
 class AppController(QObject):
@@ -64,6 +69,7 @@ class AppController(QObject):
         self._factory = service_factory
         self.service: VaultService | None = None
         self._unlock_minimized = False
+        self._instance_lock = VaultInstanceLock()  # one running copy per vault (SEC-M2)
         self.window = MainWindow(demo=demo)
         self.window.restore_geometry_text(settings.window_geometry)  # shown after unlock
         self.window.lock_requested.connect(self.lock)
@@ -118,6 +124,7 @@ class AppController(QObject):
         )
         if dialog.exec_() and dialog.service is not None:
             self.service = dialog.service
+            self._instance_lock.acquire(self.service.path)
             self._remember_vault(self.service.path)
             self._show_unlocked()
         else:
@@ -125,6 +132,11 @@ class AppController(QObject):
 
     def _unlock(self) -> None:
         if self.service is None:
+            self._welcome()
+            return
+        if not self._instance_lock.acquire(self.service.path):  # before asking the password
+            messages.show_error(None, "Vault already open", ALREADY_OPEN)
+            self.service = None
             self._welcome()
             return
         dialog = UnlockDialog(self.service, self._runner.cancel_pending, parent=None)
@@ -293,6 +305,7 @@ class AppController(QObject):
             self._run_backup(self.backups.on_lock_or_exit)
         if self.service is not None:
             self.service.lock()
+        self._instance_lock.release()
         QApplication.quit()
 
     def _remember_vault(self, path: Path) -> None:

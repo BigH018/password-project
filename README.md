@@ -237,6 +237,8 @@ No custom cryptography is used anywhere. The full byte layout is documented in
 - **Wrong password and tampering give the same message** plus a short fixed delay, so nothing
   leaks about why unlocking failed.
 - Argon2 runs on a background thread, so the window never freezes.
+- **Only one running copy can open a vault**, and a save is refused if the file was changed
+  by something else since you unlocked, so two copies can never overwrite each other.
 
 ### Limits you should know about
 - **Memory:** Python cannot guarantee that decrypted data is wiped from RAM. Locking drops

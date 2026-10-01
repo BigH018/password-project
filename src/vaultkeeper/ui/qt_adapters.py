@@ -9,19 +9,24 @@ It uses plain *daemon* threads on purpose. Qt's thread pool waits for running ta
 app quits, so a hung key derivation would make the app impossible to close. A daemon thread
 is simply abandoned on exit. ``cancel_pending()`` discards results from work the user walked
 away from (for example by closing the dialog).
+
+``VaultInstanceLock`` stops two running copies of the app from opening the same vault.
 """
 
 from __future__ import annotations
 
+import logging
 import sys
 import threading
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, TypeVar
 
-from PyQt5.QtCore import QEvent, QMimeData, QObject, QTimer, pyqtSignal
+from PyQt5.QtCore import QEvent, QLockFile, QMimeData, QObject, QTimer, pyqtSignal
 from PyQt5.QtWidgets import QApplication
 
 T = TypeVar("T")
+log = logging.getLogger(__name__)
 
 
 class _Relay(QObject):
@@ -192,3 +197,39 @@ class SessionLockWatcher:
             self.active = True
         except (OSError, AttributeError):
             self.active = False  # unavailable: the other auto-lock triggers still apply
+
+
+class VaultInstanceLock:
+    """``<vault>.lock`` held while this copy of the app has the vault open (SEC-M2).
+
+    A second running copy can't take it, so two copies never overwrite each other. A lock
+    left by a crashed copy is taken over: with no age limit (``setStaleLockTime(0)``), Qt
+    treats a lock as stale only when the process that holds it is gone.
+    """
+
+    def __init__(self) -> None:
+        self._lock: QLockFile | None = None
+        self._path: Path | None = None
+
+    def acquire(self, vault: Path) -> bool:
+        """Lock ``vault`` (releasing any other vault). False if another copy holds it."""
+        if self._lock is not None and self._path == vault:
+            return True
+        self.release()
+        lock = QLockFile(str(vault) + ".lock")
+        lock.setStaleLockTime(0)
+        if not lock.tryLock(0):
+            if lock.error() == QLockFile.LockFailedError:
+                return False
+            # The folder doesn't allow a lock file (e.g. read-only). Saving refuses to
+            # overwrite changes made by another copy anyway (core/vault_disk.py).
+            log.warning("Could not create the vault lock file (error %d)", int(lock.error()))
+            return True
+        self._lock, self._path = lock, vault
+        return True
+
+    def release(self) -> None:
+        """Give the lock up (on quit or when switching to another vault)."""
+        if self._lock is not None:
+            self._lock.unlock()
+        self._lock, self._path = None, None
