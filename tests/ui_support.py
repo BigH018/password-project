@@ -9,6 +9,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import gc  # noqa: E402
 import threading  # noqa: E402
 from collections.abc import Callable, Iterator  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -95,6 +96,31 @@ def no_real_message_boxes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(messages, "show_error", lambda *_a, **_k: None)
     monkeypatch.setattr(main_window, "confirm", lambda *_a, **_k: True)
     monkeypatch.setattr(main_window, "show_error", lambda *_a, **_k: None)
+
+
+@pytest.fixture(autouse=True)
+def dispose_session_guards(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Shut down every SessionGuard a test made, then collect garbage at a safe point.
+
+    A guard installs an app-wide event filter. Controllers live on in reference cycles, so
+    without this the GC deletes their filters at a random moment in a LATER test, possibly
+    while Qt is iterating the filter list: a Windows access violation.
+    """
+    from vaultkeeper.ui.session_guard import SessionGuard
+
+    created: list[SessionGuard] = []
+    original = SessionGuard.__init__
+
+    def tracking_init(self: SessionGuard, *args: Any, **kwargs: Any) -> None:
+        original(self, *args, **kwargs)
+        created.append(self)
+
+    monkeypatch.setattr(SessionGuard, "__init__", tracking_init)
+    yield
+    for guard in created:
+        guard.shutdown()
+    created.clear()
+    gc.collect()
 
 
 @pytest.fixture(autouse=True)

@@ -16,6 +16,7 @@ import re
 import sys
 import threading
 import traceback
+from collections.abc import Callable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import TracebackType
@@ -115,8 +116,15 @@ def close_logging() -> None:
         handler.close()
 
 
-def install_exception_hooks(logger: logging.Logger) -> None:
-    """Route uncaught exceptions (main and worker threads) to sanitized log entries."""
+def install_exception_hooks(
+    logger: logging.Logger, on_error: Callable[[], None] | None = None
+) -> None:
+    """Route uncaught exceptions (main and worker threads) to sanitized log entries.
+
+    ``on_error`` (optional) is called after logging, with no arguments, so the UI can show a
+    generic notice without ever seeing the exception or its message. It may be called from any
+    thread. If it fails, that failure is logged (type only) and otherwise ignored.
+    """
 
     def _hook(
         exc_type: type[BaseException],
@@ -126,6 +134,11 @@ def install_exception_hooks(logger: logging.Logger) -> None:
         if issubclass(exc_type, KeyboardInterrupt):
             return
         logger.critical("Uncaught exception\n%s", format_exception_safely(exc_type, exc, tb))
+        if on_error is not None:
+            try:
+                on_error()
+            except Exception as notify_exc:  # the hook itself must never raise
+                logger.error("Error notice failed (%s)", type(notify_exc).__name__)
 
     def _thread_hook(args: threading.ExceptHookArgs) -> None:
         _hook(args.exc_type, args.exc_value, args.exc_traceback)

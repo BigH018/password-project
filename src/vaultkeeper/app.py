@@ -23,6 +23,7 @@ from vaultkeeper.config.settings import load_settings, update_settings
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.ui.app_controller import AppController
 from vaultkeeper.ui.branding import apply_branding, disable_help_buttons
+from vaultkeeper.ui.error_dialog import ErrorReporter
 from vaultkeeper.ui.qt_adapters import QtTaskRunner
 from vaultkeeper.ui.theme import apply_dark_theme
 
@@ -55,8 +56,9 @@ def run(argv: list[str] | None = None) -> int:
     else:
         data_dir = app_data_dir()
 
-    logger = configure_logging(log_dir(data_dir))
-    install_exception_hooks(logger)
+    logs = log_dir(data_dir)
+    logger = configure_logging(logs)
+    install_exception_hooks(logger)  # log-only until the UI can show a notice
     settings_file = settings_path(data_dir)
     settings = load_settings(settings_file)
     if demo_env is not None:  # demo backups go inside the demo folder too
@@ -71,6 +73,8 @@ def run(argv: list[str] | None = None) -> int:
     app.setQuitOnLastWindowClosed(False)
     apply_branding(app)
     apply_dark_theme(app)
+    reporter = ErrorReporter(logs)
+    install_exception_hooks(logger, reporter.report)
     runner = QtTaskRunner()
     controller = AppController(
         settings,

@@ -138,7 +138,8 @@ vaultkeeper/                       repo root
       settings.py                  load/save non-secret settings JSON (incl. window geometry);
                                    SettingsFile = current settings + update-and-save
       paths.py                     app-data dir and default file locations
-      logging_setup.py             logging config + redaction filter (defense in depth)
+      logging_setup.py             logging config + redaction filter (defense in depth); exception
+                                   hooks log type/location, then call an argument-less on_error
     core/
       models.py                    dataclasses: Account (+ extra values), Game (+ template), Rank, VaultData
       game_template.py             GameTemplate/TierDef/CustomField, starters from presets
@@ -200,7 +201,10 @@ vaultkeeper/                       repo root
       settings_dialog.py           File -> Settings (Ctrl+,): auto-lock/Quick Add timeouts, clipboard
                                    seconds, lock switches, restore defaults, Backups... button
       generator_dialog.py          password generator (copy or "use" into the form)
-      messages.py                  generic error texts (error_text) + confirm/error boxes
+      messages.py                  generic error texts (error_text, FIELD_LABELS = on-screen field
+                                   names) + confirm/error boxes
+      error_dialog.py              ErrorReporter: "Something went wrong" notice for uncaught errors
+                                   (queued, any thread, one at a time, Open log folder)
       widgets/
         account_table.py           table model (passwords masked, extra columns, never secret) + proxy
         game_sidebar.py            "All games" + games with counts
@@ -219,7 +223,8 @@ vaultkeeper/                       repo root
         app_icon.ico               16-256px icon (pixel-art upscale of the source; package data)
   tests/
     conftest.py                    fast KDF params, network block (autouse), FakeStore, fixtures
-    ui_support.py                  pytest plugin: off-screen Qt, QtTaskRunner, Gate (blocking KDF)
+    ui_support.py                  pytest plugin: off-screen Qt, QtTaskRunner, Gate (blocking KDF),
+                                   SessionGuard shutdown + gc after each test
     fake_data.py                   obviously fake games/accounts
     test_architecture.py           AST scan: no PyQt5 in headless layers, no forbidden calls/imports
     test_no_network.py             flows run with sockets blocked
@@ -230,7 +235,7 @@ vaultkeeper/                       repo root
     test_constants.py              preset consistency (divisions, tiers, regions)
     test_settings.py               load/save, defaults, corrupt file handling, paths, geometry,
                                    SettingsFile
-    test_logging_setup.py          redaction, exceptions logged without messages
+    test_logging_setup.py          redaction, exceptions logged without messages, on_error notice
     test_header.py, test_kdf.py, test_cipher.py, test_envelope.py, test_vault_file.py
     test_vault_service.py, test_password_policy.py, test_recover_script.py
     test_accounts.py, test_games.py, test_search.py
@@ -249,7 +254,8 @@ vaultkeeper/                       repo root
                                    test_theme (stylesheet loads, offline, palette fallback),
                                    test_branding (icon, titles, no "?", window hidden while locked),
                                    test_settings_dialog (values, defaults, save + apply live),
-                                   test_window_geometry (saved on lock/quit, restored at start)
+                                   test_window_geometry (saved on lock/quit, restored at start),
+                                   test_error_dialog (notice, threads, field labels complete)
 ```
 
 ---
@@ -335,7 +341,8 @@ account data. Duplicate check is a warning only: same game and the same login or
   `NotFoundError`, `DuplicateGameError`, `GameInUseError`.
 - Translate library exceptions at layer boundaries. Use `from None` when chaining could leak data.
 - The UI shows generic text via `ui/messages.py`. Unexpected errors go to a top-level hook
-  that logs type and location only (a user-facing error dialog is part of Phase 8).
+  that logs type and location only, then `ui/error_dialog.py` shows a generic notice (the
+  app keeps running).
 
 ## 10. Testing
 - pytest (+ pytest-qt for UI smoke tests). Every headless module has a matching test file.
@@ -489,6 +496,13 @@ python -m vaultkeeper  # run the app
   base64 chars, <= 2048). Saved on lock and quit only if the window is visible; restored when
   the controller builds the window (Qt pulls it back on screen; maximized is kept). Settings
   version stays 1: the field has a default, so old files load.
+- Error notice (8d): uncaught errors are logged (type/location) and show "Something went
+  wrong" with the log folder; the app keeps running (every change is already saved). The
+  notice never receives the exception. Validation messages use on-screen labels
+  (`FIELD_LABELS`; a test checks every core field name has one).
+- UI tests: every SessionGuard is shut down and `gc.collect()` runs after each test
+  (`tests/ui_support.py`). Without it, guards' app-wide event filters were deleted by the GC
+  mid-event in a later test: a Windows access violation (seen in 8d).
 - Spin boxes are left unstyled in dark.qss (QSS can't draw arrows without image files).
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
   logs), deleted on exit; leftovers are swept at the next demo start. Real settings untouched.
@@ -510,7 +524,7 @@ python -m vaultkeeper  # run the app
 - [ ] Phase 8: Polish + packaging (IN PROGRESS)
   - [x] 8a: dark theme (dark.qss loaded by theme.py)
   - [x] 8a+: branding (title, icon, taskbar id), main window hidden while locked
-  - [x] 8b: settings dialog  - [x] 8c: window geometry  - [ ] 8d: error dialog  - [ ] 8e: .exe
+  - [x] 8b: settings dialog  - [x] 8c: window geometry  - [x] 8d: error dialog  - [ ] 8e: .exe
 
 ### Next up: Phase 8 handoff (for a fresh session)
 Present a short plan list first and wait for the user's go, as with earlier phases.

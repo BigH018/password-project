@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from vaultkeeper.config import logging_setup as ls
 def restore_logging() -> Iterator[None]:
     root = logging.getLogger()
     handlers, level = list(root.handlers), root.level
-    hook = sys.excepthook
+    hook, thread_hook = sys.excepthook, threading.excepthook
     yield
     for h in list(root.handlers):
         root.removeHandler(h)
@@ -25,6 +26,7 @@ def restore_logging() -> Iterator[None]:
         root.addHandler(h)
     root.setLevel(level)
     sys.excepthook = hook
+    threading.excepthook = thread_hook
 
 
 @pytest.mark.parametrize(
@@ -88,3 +90,51 @@ def test_format_exception_safely_includes_chain() -> None:
         text = ls.format_exception_safely(type(exc), exc, exc.__traceback__)
     assert "RuntimeError <- OSError" in text
     assert "detail" not in text
+
+
+def _raise_fake() -> None:
+    raise RuntimeError("player1@example.test Fake-Passw0rd-1!")
+
+
+def test_on_error_called_after_logging_without_details(
+    tmp_path: Path, restore_logging: None
+) -> None:
+    logger = ls.configure_logging(tmp_path)
+    calls: list[tuple[object, ...]] = []
+    ls.install_exception_hooks(logger, lambda *args: calls.append(args))
+    try:
+        _raise_fake()
+    except RuntimeError:
+        sys.excepthook(*sys.exc_info())
+    assert calls == [()]  # the notifier gets nothing: no exception, no message
+    ls.close_logging()
+    assert "RuntimeError" in (tmp_path / ls.LOG_FILE_NAME).read_text(encoding="utf-8")
+
+
+def test_failing_on_error_is_logged_and_swallowed(tmp_path: Path, restore_logging: None) -> None:
+    logger = ls.configure_logging(tmp_path)
+
+    def broken() -> None:
+        raise ValueError("Fake-Passw0rd-1!")
+
+    ls.install_exception_hooks(logger, broken)
+    try:
+        _raise_fake()
+    except RuntimeError:
+        sys.excepthook(*sys.exc_info())  # must not raise
+    ls.close_logging()
+    text = (tmp_path / ls.LOG_FILE_NAME).read_text(encoding="utf-8")
+    assert "Error notice failed (ValueError)" in text
+    assert "Fake-Passw0rd" not in text
+
+
+def test_thread_exceptions_also_notify(tmp_path: Path, restore_logging: None) -> None:
+    logger = ls.configure_logging(tmp_path)
+    calls: list[bool] = []
+    ls.install_exception_hooks(logger, lambda: calls.append(True))
+    worker = threading.Thread(target=_raise_fake)
+    worker.start()
+    worker.join()
+    ls.close_logging()
+    assert calls == [True]
+

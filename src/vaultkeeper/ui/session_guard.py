@@ -50,6 +50,13 @@ class SessionGuard(QObject):
         self.clipboard.clear_after = settings.clipboard_clear_seconds
         self.tracker.set_base_timeout(settings.autolock_minutes * 60)
 
+    def shutdown(self) -> None:
+        """Stop checking and remove the app-wide activity filter (on quit)."""
+        self._timer.stop()
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self._filter)
+
     def watch_session(self, window_id: int) -> bool:
         """Listen for Windows locking. Returns True if the watcher is active.
 

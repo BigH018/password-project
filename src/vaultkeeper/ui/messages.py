@@ -20,6 +20,53 @@ AUTH_FAILED = "Wrong password or the vault file is damaged."
 DAMAGED_FILE = "The vault file is damaged or isn't an Account Manager vault."
 UNEXPECTED = "Something went wrong. The details (without any of your data) were logged."
 
+# Service field names -> the labels the user sees on screen.
+FIELD_LABELS = {
+    "account": "The account",
+    "character_types": "Character types",
+    "display_name": "Name",
+    "email": "Email",
+    "email_login_url": "Email login URL",
+    "email_password": "Email password",
+    "export_file": "Export file",
+    "extra_fields": "Extra fields",
+    "fields": "Shown fields",
+    "game_id": "Game",
+    "game_name": "Game name",
+    "id": "Internal ID",
+    "length": "Password length",
+    "login_username": "Login",
+    "master_password": "Master password",
+    "notes": "Notes",
+    "password": "Password",
+    "preset": "Game preset",
+    "rank": "Rank",
+    "ranks": "Ranks",
+    "recovery_email": "Recovery email",
+    "region": "Region",
+    "regions": "Regions",
+    "status": "Status",
+    "tag": "Tag",
+    "tags": "Labels",
+    "totp_secret": "2FA key",
+}
+# Reasons starting with one of these read as "<Label> <reason>"; others as "<Label>: <reason>".
+_VERB_STARTS = ("is ", "must ", "has ", "needs ", "contains ", "can't ", "already ")
+
+
+def field_label(field: str) -> str:
+    """On-screen label for a field (extra fields already use the user's own label)."""
+    if field in FIELD_LABELS:
+        return FIELD_LABELS[field]
+    text = field.replace("_", " ")
+    return text[:1].upper() + text[1:]
+
+
+def validation_text(field: str, reason: str) -> str:
+    """One readable sentence for a ValidationError (never includes the value)."""
+    joiner = " " if reason.startswith(_VERB_STARTS) else ": "
+    return f"{field_label(field)}{joiner}{reason}."
+
 
 def error_text(exc: BaseException) -> str:
     """Friendly text for an exception raised by a service."""
@@ -30,7 +77,7 @@ def error_text(exc: BaseException) -> str:
     if isinstance(exc, WeakPasswordError):
         return f"Master password {exc.reason}."
     if isinstance(exc, ValidationError):
-        return f"{exc.field.replace('_', ' ').capitalize()} {exc.reason}."
+        return validation_text(exc.field, exc.reason)
     if isinstance(exc, VaultIOError | VaultKeeperError):
         return str(exc)
     return UNEXPECTED

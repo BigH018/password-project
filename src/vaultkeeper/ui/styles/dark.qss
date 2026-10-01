@@ -233,7 +233,7 @@ QScrollBar::add-page, QScrollBar::sub-page {
 }
 
 /* ---- Dialog boxes ---- */
-QMessageBox QLabel {
+QMessageBox QLabel#qt_msgbox_label {
     min-width: 260px;
 }
 QProgressBar {

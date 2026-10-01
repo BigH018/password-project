@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from PyQt5.QtCore import Qt
 
 from test_clipboard import FakeClipboard
 from vaultkeeper.config.settings import Settings, load_settings
@@ -139,3 +140,19 @@ def test_session_lock_setting_applies_live(qapp: Any) -> None:
     guard.apply_settings(Settings(lock_on_session_lock=False))
     guard._session_locked()
     assert seen == ["session"]
+
+
+def test_guard_shutdown_stops_timer_and_activity_filter(qapp: Any) -> None:
+    from PyQt5.QtCore import QEvent
+    from PyQt5.QtGui import QKeyEvent
+    from PyQt5.QtWidgets import QWidget
+
+    guard = SessionGuard(Settings(), backend=FakeClipboard())
+    seen: list[bool] = []
+    guard._filter._on_activity = lambda: seen.append(True)
+    target = QWidget()
+    qapp.sendEvent(target, QKeyEvent(QEvent.KeyPress, 0x41, Qt.NoModifier))
+    assert seen == [True]
+    guard.shutdown()
+    qapp.sendEvent(target, QKeyEvent(QEvent.KeyPress, 0x41, Qt.NoModifier))
+    assert seen == [True] and not guard._timer.isActive()

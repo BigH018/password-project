@@ -273,6 +273,7 @@ class AppController(QObject):
         self._remember_geometry()
         self._runner.cancel_pending()
         self.guard.disarm()
+        self.guard.shutdown()
         if self.backups is not None:
             self._run_backup(self.backups.on_lock_or_exit)
         if self.service is not None:
