@@ -113,7 +113,7 @@ scripts/recover_vault.py is standalone: it must NOT import vaultkeeper.
 ```
 vaultkeeper/                       repo root
   CLAUDE.md                        this rulebook
-  README.md                        install/run, security notes, "lost master password = lost vault"
+  README.md                        GitHub front page: features, setup, shortcuts, security, FAQ
   requirements.txt                 pinned runtime deps
   requirements-dev.txt             pinned dev deps (pytest, pytest-qt, ruff, pyinstaller)
   pyproject.toml                   package metadata (src layout), pytest + ruff config
@@ -121,6 +121,7 @@ vaultkeeper/                       repo root
   docs/
     VAULT_FORMAT.md                byte layout, KDF defaults + rationale, bounds, atomic save
     DATA_MODEL.md                  fields, game templates, search, paste assist, duplicates, schema history
+    images/                        README screenshots (demo mode, fake data only) + icon.png
   scripts/
     recover_vault.py               standalone decrypt-to-stdout (cryptography + argon2-cffi only)
   packaging/
