@@ -17,7 +17,7 @@ from vaultkeeper.core.serialization import loads_payload
 from vaultkeeper.crypto import envelope
 from vaultkeeper.crypto.header import FileKind
 from vaultkeeper.crypto.kdf import DEFAULT_KDF_PARAMS, KdfParams, derive_key, new_salt, wipe
-from vaultkeeper.errors import ValidationError
+from vaultkeeper.errors import ValidationError, VaultIOError
 from vaultkeeper.storage.vault_file import write_bytes_atomic
 
 log = logging.getLogger(__name__)
@@ -25,14 +25,23 @@ KeyDeriver = Callable[[str, bytes, KdfParams], bytearray]
 
 
 def check_export_path(path: Path, vault_path: Path, overwrite: bool = False) -> Path:
-    """Normalize and check an export target. Adds ``.vault`` if missing."""
+    """Normalize and check an export target. Adds ``.vault`` if missing.
+
+    The path must be absolute (a relative one would land wherever the app happens to run).
+    A folder that can't be accessed is a VaultIOError, never a raw OSError.
+    """
+    if not path.is_absolute():
+        raise ValidationError("export_file", "must be a full path, including the drive or folder")
     if path.suffix.lower() != VAULT_EXTENSION:
         path = path.with_name(path.name + VAULT_EXTENSION)
-    # Exports always end in .vault, so the only possible clash is the vault file itself.
-    if path.resolve() == vault_path.resolve():
-        raise ValidationError("export_file", "can't be the vault file itself")
-    if path.exists() and not overwrite:
-        raise ValidationError("export_file", "already exists")
+    try:
+        # Exports always end in .vault, so the only possible clash is the vault file itself.
+        if path.resolve() == vault_path.resolve():
+            raise ValidationError("export_file", "can't be the vault file itself")
+        if path.exists() and not overwrite:
+            raise ValidationError("export_file", "already exists")
+    except OSError:
+        raise VaultIOError("Could not access the export folder.") from None
     return path
 
 

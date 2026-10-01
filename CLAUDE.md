@@ -196,7 +196,8 @@ vaultkeeper/                       repo root
                                    applies the screen-capture exclusion setting
       copy_actions.py              copy actions (Ctrl+B/C/E on the table) + right-click menu
       backup_dialog.py             backup folder / keep N / interval + Backup now;
-                                   after_password_change (offer to delete old-password backups)
+                                   after_password_change (offer to delete old-password backups);
+                                   typed folder applied after a 400 ms pause, full paths only
       export_dialog.py             encrypted export (own password; cancel writes nothing)
       app_controller.py            screen flow: welcome -> create/unlock -> main; lock (closes dialogs); quit;
                                    holds the vault's instance lock from the unlock prompt until quit
@@ -295,6 +296,7 @@ vaultkeeper/                       repo root
                                    test_cleanup (menus, boxes, dialogs deleted after use),
                                    test_last_saved ("Last saved" on unlock, older-file warning),
                                    test_reveal_and_capture (Show passwords timeout, capture),
+                                   test_dialog_paths (full paths, unreadable folders, debounce),
                                    test_secret_field (clear() wipes undo in all password dialogs)
 ```
 
@@ -553,6 +555,10 @@ python -m vaultkeeper  # run the app
   orders them by parsed timestamp + counter (never by file name; CR-L1). A
   "backups are off" banner shows until a folder is chosen. Demo backups stay in the demo folder.
 - A cancelled export writes nothing (checked after the KDF, before writing).
+- Backup folder and export file must be full (absolute) paths (CR-L3). Folders that can't be
+  read give a VaultIOError / "Can't read this folder", never the crash notice. The Backups
+  dialog lists a typed folder only after a 400 ms pause (Browse, Save and Backup now apply
+  at once); Cancel restores the previous values exactly.
 - UI tests: `QApplication.quit` is a no-op (`tests/ui_support.py`); a controller quitting
   at teardown used to stop event delivery for later tests.
 - Quick Add (Ctrl+Shift+N): Enter saves and starts a fresh form (Ctrl+Enter also works in
@@ -658,7 +664,7 @@ Group 3 (done, pushed): entry workflow and lock rule
 - [x] 13 SEC-M3 show "Last saved: <updated_at>" on unlock; keep last-seen updated_at per
       vault path in settings (timestamp only); warn if the vault goes backwards in time
 
-Group 4 (done): input and key-derivation hardening
+Group 4 (done, pushed): input and key-derivation hardening
 - [x] 14 SEC-Low1 password_policy: NFC first, strip surrounding whitespace and Unicode Cf
       before length/common-list checks (tests: decomposed chars, trailing space, ZWSP)
 - [x] 15 SEC-Low3 reject Unicode Cf in names, logins, identity fields (ZWJ only if needed
@@ -672,8 +678,8 @@ Group 4 (done): input and key-derivation hardening
       and on lock; optional setting (off, Windows only, tested no-op elsewhere) for
       SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)
 
-Group 5: small and deferred items
-- [ ] 19 CR-L3 full paths required in backup/export dialogs; unreadable folders handled
+Group 5 (in progress): small and deferred items
+- [x] 19 CR-L3 full paths required in backup/export dialogs; unreadable folders handled
       without "Something went wrong"; don't list the folder on every keystroke (debounce or
       on confirm)
 - [ ] 20 CR-L7 tell the user where the .damaged copy was saved (`last_damaged_copy`)

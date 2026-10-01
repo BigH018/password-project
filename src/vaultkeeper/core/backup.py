@@ -25,7 +25,7 @@ from pathlib import Path
 
 from vaultkeeper.config.constants import VAULT_EXTENSION
 from vaultkeeper.crypto import header
-from vaultkeeper.errors import VaultIOError, VaultKeeperError
+from vaultkeeper.errors import ValidationError, VaultIOError, VaultKeeperError
 from vaultkeeper.storage.vault_file import copy_file_verified, read_vault_bytes
 
 log = logging.getLogger(__name__)
@@ -66,14 +66,21 @@ class BackupService:
         return self.backup_dir is not None
 
     def configure(self, backup_dir: Path | None, keep: int, min_interval_minutes: int) -> None:
-        """Apply new settings."""
+        """Apply new settings. The folder must be an absolute path (ValidationError)."""
+        if backup_dir is not None and not backup_dir.is_absolute():
+            raise ValidationError("backup_dir",
+                                  "must be a full path, including the drive or folder")
         self.backup_dir, self.keep, self.min_interval_minutes = (
             backup_dir, keep, min_interval_minutes)
 
     def same_folder_as_vault(self) -> bool:
         """True if backups would land next to the vault (no protection if that disk dies)."""
-        return self.backup_dir is not None and (
-            self.backup_dir.resolve() == self._vault.parent.resolve())
+        if self.backup_dir is None:
+            return False
+        try:
+            return self.backup_dir.resolve() == self._vault.parent.resolve()
+        except OSError:
+            return False
 
     # --- naming -----------------------------------------------------------------------------
 
@@ -92,12 +99,20 @@ class BackupService:
         return match.group(1), int(match.group(2) or 1)
 
     def list_backups(self) -> list[Path]:
-        """This vault's backups in the folder, oldest first (by timestamp, then counter)."""
-        if self.backup_dir is None or not self.backup_dir.is_dir():
+        """This vault's backups in the folder, oldest first (by timestamp, then counter).
+
+        A folder that can't be read raises VaultIOError (never a raw OSError).
+        """
+        if self.backup_dir is None:
             return []
         pattern = self._pattern()
-        return sorted((p for p in self.backup_dir.iterdir() if pattern.match(p.name)),
-                      key=self._order)
+        try:
+            if not self.backup_dir.is_dir():
+                return []
+            names = [p for p in self.backup_dir.iterdir() if pattern.match(p.name)]
+        except OSError:
+            raise VaultIOError("Could not read the backup folder.") from None
+        return sorted(names, key=self._order)
 
     def _target(self) -> Path:
         """A new name that sorts after every existing backup made in the same second."""

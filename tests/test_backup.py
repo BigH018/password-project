@@ -234,3 +234,31 @@ def test_rotation_orders_across_seconds_and_counters(vault: VaultService,
                             stamp=lambda: next(stamps))
     made = [backups.backup_now() for _ in range(3)]
     assert backups.list_backups() == made
+
+
+# --- CR-L3: full paths only, unreadable folders are friendly errors -------------------------
+
+
+def test_backup_folder_must_be_a_full_path(vault: VaultService, clock: Clock) -> None:
+    from vaultkeeper.errors import ValidationError
+
+    backups = BackupService(vault.path, None, 10, 10, clock, clock.stamp)
+    with pytest.raises(ValidationError) as info:
+        backups.configure(Path("relative-backups"), 10, 10)
+    assert info.value.field == "backup_dir" and "full path" in info.value.reason
+    assert backups.backup_dir is None
+
+
+def test_listing_an_unreadable_folder_is_a_friendly_error(
+    vault: VaultService, tmp_path: Path, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backups = _service(vault, tmp_path, clock)
+    backups.backup_now()
+
+    def denied(_self: Path) -> None:
+        raise PermissionError("access denied")
+
+    monkeypatch.setattr(Path, "iterdir", denied)
+    with pytest.raises(VaultIOError):
+        backups.list_backups()
+

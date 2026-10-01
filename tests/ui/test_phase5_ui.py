@@ -237,6 +237,7 @@ def test_backup_dialog(qtbot: Any, unlocked: VaultService, tmp_path: Path) -> No
     dialog.backup_now_button.click()
     assert len(backups.list_backups()) == 1 and "1 backup(s)" in dialog.status.text()
     dialog.folder.setText(str(unlocked.path.parent))
+    dialog.refresh_timer.timeout.emit()  # the user paused typing
     assert "same folder as your vault" in dialog.warning.text()
     dialog.reject()  # cancel restores the original (off)
     assert backups.backup_dir is None

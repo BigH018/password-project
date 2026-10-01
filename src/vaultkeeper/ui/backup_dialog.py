@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
+from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -26,6 +27,8 @@ from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE, WARNING_BANNER_STYLE
 
 FolderChooser = Callable[[QWidget, str], str]
+FOLDER_PAUSE_MS = 400  # list the folder once typing pauses, not on every keystroke
+UNREADABLE_FOLDER = "Can't read this folder. Check that it exists and that you can open it."
 OLD_BACKUPS_TEXT = (
     "{count} older backup(s) in your backup folder still open with your OLD master "
     "password.\n\nA backup with your new password was just made. Delete the older ones now?")
@@ -122,8 +125,13 @@ class BackupDialog(QDialog):
         layout.addWidget(self.error_label)
         layout.addLayout(buttons)
 
+        # Typing restarts this timer; the folder is checked and listed once the user pauses.
+        self.refresh_timer = QTimer(self)
+        self.refresh_timer.setSingleShot(True)
+        self.refresh_timer.setInterval(FOLDER_PAUSE_MS)
+        self.refresh_timer.timeout.connect(self._apply_to_service)
         self.browse_button.clicked.connect(self._browse)
-        self.folder.textChanged.connect(self._apply_to_service)
+        self.folder.textChanged.connect(self.refresh_timer.start)
         self.keep_spin.valueChanged.connect(self._apply_to_service)
         self.interval_spin.valueChanged.connect(self._apply_to_service)
         self.backup_now_button.clicked.connect(self._backup_now)
@@ -140,10 +148,20 @@ class BackupDialog(QDialog):
         text = self.folder.text().strip()
         return Path(text) if text else None
 
-    def _apply_to_service(self) -> None:
-        self._backups.configure(self.folder_path, self.keep_spin.value(),
-                                self.interval_spin.value())
+    def _apply_to_service(self) -> bool:
+        """Apply the form to the backup service. False (with a message) if it was refused,
+        e.g. a folder that isn't a full path."""
+        self.refresh_timer.stop()
+        try:
+            self._backups.configure(self.folder_path, self.keep_spin.value(),
+                                    self.interval_spin.value())
+        except VaultKeeperError as exc:
+            self.error_label.setText(error_text(exc))
+            self._refresh()
+            return False
+        self.error_label.clear()
         self._refresh()
+        return True
 
     def _refresh(self) -> None:
         if not self._backups.enabled:
@@ -155,9 +173,13 @@ class BackupDialog(QDialog):
             self.warning.show()
         else:
             self.warning.hide()
-        existing = self._backups.list_backups()
-        self.status.setText(f"{len(existing)} backup(s) in this folder. Newest: "
-                            f"{existing[-1].name}" if existing else "No backups yet.")
+        try:
+            existing = self._backups.list_backups()
+        except VaultKeeperError:
+            self.status.setText(UNREADABLE_FOLDER)
+        else:
+            self.status.setText(f"{len(existing)} backup(s) in this folder. Newest: "
+                                f"{existing[-1].name}" if existing else "No backups yet.")
         self.backup_now_button.setEnabled(self._backups.enabled)
         ok, failed = self._backups.last_success, self._backups.last_failure
         line = (f"Last successful backup: {local_time_text(ok)}." if ok
@@ -172,8 +194,11 @@ class BackupDialog(QDialog):
         chosen = self._choose(self, self.folder.text())
         if chosen:
             self.folder.setText(chosen)
+            self._apply_to_service()  # a picked folder needs no typing pause
 
     def _backup_now(self) -> None:
+        if not self._apply_to_service():
+            return
         try:
             self._backups.backup_now()
         except VaultKeeperError as exc:
@@ -183,7 +208,14 @@ class BackupDialog(QDialog):
         self.error_label.clear()
         self._refresh()
 
+    def accept(self) -> None:
+        """Save: apply what's typed now; stay open if it's refused (e.g. not a full path)."""
+        if self._apply_to_service():
+            super().accept()
+
     def reject(self) -> None:
-        """Cancel: put the previous settings back."""
-        self._backups.configure(*self._original)
+        """Cancel: put the previous settings back exactly as they were."""
+        self.refresh_timer.stop()
+        b = self._backups
+        b.backup_dir, b.keep, b.min_interval_minutes = self._original
         super().reject()

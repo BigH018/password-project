@@ -26,6 +26,7 @@ UNEXPECTED = "Something went wrong. The details (without any of your data) were 
 # Service field names -> the labels the user sees on screen.
 FIELD_LABELS = {
     "account": "The account",
+    "backup_dir": "Backup folder",
     "character_types": "Character types",
     "display_name": "Name",
     "email": "Email",

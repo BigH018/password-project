@@ -75,3 +75,25 @@ def test_cancelled_export_writes_nothing(tmp_path: Path) -> None:
     assert write_export(b"{}", target, OTHER_MASTER, kdf_params=FAST_KDF,
                         cancelled=lambda: True) is False
     assert not target.exists()
+
+
+# --- CR-L3: full paths only, folder errors are friendly --------------------------------
+
+
+def test_export_path_must_be_a_full_path(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError) as info:
+        check_export_path(Path("relative-export"), tmp_path / "v.vault")
+    assert info.value.field == "export_file" and "full path" in info.value.reason
+
+
+def test_unreadable_export_folder_is_a_friendly_error(tmp_path: Path,
+                                                      monkeypatch: pytest.MonkeyPatch) -> None:
+    from vaultkeeper.errors import VaultIOError
+
+    def denied(_self: Path) -> bool:
+        raise PermissionError("access denied")
+
+    monkeypatch.setattr(Path, "exists", denied)
+    with pytest.raises(VaultIOError):
+        check_export_path(tmp_path / "locked" / "export", tmp_path / "v.vault")
+
