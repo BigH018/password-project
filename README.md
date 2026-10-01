@@ -239,6 +239,8 @@ No custom cryptography is used anywhere. The full byte layout is documented in
 - Argon2 runs on a background thread, so the window never freezes.
 - **Only one running copy can open a vault**, and a save is refused if the file was changed
   by something else since you unlocked, so two copies can never overwrite each other.
+- **"Last saved" on unlock**, and a warning if the vault file is older than the version this
+  PC last saw (for example an old copy put back by a sync tool).
 
 ### Limits you should know about
 - **Memory:** Python cannot guarantee that decrypted data is wiped from RAM. Locking drops
@@ -285,7 +287,7 @@ Open *File -> Settings...* (`Ctrl+,`). Changes apply immediately, with no restar
 | What | Where (Windows) |
 |---|---|
 | Your vault | Wherever you chose (default `Documents\VaultKeeper\vaultkeeper.vault`) |
-| Settings (no secrets) | `%APPDATA%\VaultKeeper\settings.json` |
+| Settings (no secrets: options, window position, backup and last-saved times) | `%APPDATA%\VaultKeeper\settings.json` |
 | Logs (no secrets) | `%APPDATA%\VaultKeeper\logs\` |
 | Backups | The folder you choose in *File -> Backups...* |
 

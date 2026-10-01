@@ -141,7 +141,7 @@ vaultkeeper/                       repo root
     config/
       constants.py                 statuses, per-game rank/region presets, defaults, limits
       settings.py                  load/save non-secret settings JSON (incl. window geometry,
-                                   last backup success/failure times);
+                                   last backup success/failure times, last-saved time per vault);
                                    SettingsFile = current settings + update-and-save
       paths.py                     app-data dir and default file locations
       logging_setup.py             logging config + redaction filter (defense in depth); exception
@@ -162,7 +162,8 @@ vaultkeeper/                       repo root
       vault_service.py             create/unlock/lock/save/change password; backup-safe save after
                                    .bak; on_saved listeners (backups)
       vault_disk.py                file on disk vs session: digest, verifier, quarantine_target
-                                   (damaged -> .damaged copy; changed elsewhere -> VaultConflictError)
+                                   (damaged -> .damaged copy; changed elsewhere -> VaultConflictError);
+                                   went_back_in_time / remember_saved_at (SEC-M3)
       account_service.py           account CRUD + duplicate detection (warning only)
       game_service.py              add (starter/template) / rename / set_template (never blocked) / delete
       search.py                    AccountFilter, free-text search (never secrets), facets, rank sort key
@@ -204,7 +205,8 @@ vaultkeeper/                       repo root
       main_menus.py                toolbar + File/Games/Tools menus built from the window's actions
       accounts_view.py             AccountsPanel: game sidebar | search bar over sortable table
       unlock_dialog.py             master password, busy state, explicit "Try the backup copy",
-                                   small "Open a different vault file..." link (restore / moved vault)
+                                   small "Open a different vault file..." link (restore / moved vault);
+                                   check_last_saved/record_last_saved ("Last saved", older-file warning)
       create_vault_dialog.py       location + master password + confirm + strength hint
       change_password_dialog.py    change master password (KDF off-thread, closable while busy)
       account_dialog.py            add/edit: AccountForm + live duplicate warning + unsaved-changes
@@ -218,7 +220,7 @@ vaultkeeper/                       repo root
       safe_text.py                 plain_label / message_box (Qt.PlainText: user data is never
                                    rendered as HTML), link_label for fixed app text only
       messages.py                  generic error texts (error_text, FIELD_LABELS = on-screen field
-                                   names) + confirm/error boxes + run_modal (exec_ then
+                                   names) + confirm/error/warning boxes + run_modal (exec_ then
                                    deleteLater: closed dialogs never linger)
       error_dialog.py              ErrorReporter: "Something went wrong" notice for uncaught errors
                                    (queued, any thread, one at a time, Open log folder)
@@ -242,7 +244,8 @@ vaultkeeper/                       repo root
   tests/
     conftest.py                    fast KDF params, network block (autouse), FakeStore, fixtures
     ui_support.py                  pytest plugin: off-screen Qt, QtTaskRunner, Gate (blocking KDF),
-                                   SessionGuard shutdown + gc after each test
+                                   SessionGuard shutdown + gc after each test, default stubs for
+                                   messages.confirm/show_error/show_warning
     fake_data.py                   obviously fake games/accounts
     test_architecture.py           AST scan: no PyQt5 in headless layers, no forbidden calls/imports,
                                    labels/message boxes only via ui/safe_text.py, dialogs
@@ -282,6 +285,7 @@ vaultkeeper/                       repo root
                                    test_plain_text (HTML-looking user data shown literally),
                                    test_account_form (name#tag split on focus-out),
                                    test_cleanup (menus, boxes, dialogs deleted after use),
+                                   test_last_saved ("Last saved" on unlock, older-file warning),
                                    test_secret_field (clear() wipes undo in all password dialogs)
 ```
 
@@ -456,6 +460,11 @@ python -m vaultkeeper  # run the app
   dialog runs through `messages.run_modal` (architecture test), the context menu deletes
   itself and drops its "Copy <secret field>" actions. Test fakes need a no-op
   `deleteLater`.
+- Rollback notice (SEC-M3): after unlock the status bar shows "Last saved: <time>". Settings
+  keep the last `updated_at` seen per vault path (timestamps only, max 20 vaults). If a vault
+  opens OLDER than that (not when opened from `.bak`), a warning says it may be an old copy
+  put back; it warns once, then the file becomes the new reference. Recorded at unlock and
+  after every save.
 - Two running copies (SEC-M2): the controller takes `<vault>.lock` (QLockFile, stale only when
   the owner process is gone) before the unlock prompt and keeps it until quit; a second copy
   gets "already open" and the welcome screen. Backstop: a save is refused
@@ -611,7 +620,7 @@ Group 2 (done, pushed with this CLAUDE.md update):
 - [x] 8 SEC-M2 instance lock (`VaultInstanceLock`, QLockFile) + save refused if the file
       changed on disk (`core/vault_disk.py`, VaultConflictError)
 
-Group 3 (next): entry workflow and lock rule
+Group 3 (done): entry workflow and lock rule
 - [x] 9 CR-M2 switching game on the account form resets rank/region not in the new game's
       list; "not in list" values are kept only for the account's own stored game
 - [x] 10 CR-M3 Tag empty + Name contains name#tag -> split with split_tagged_id (focus-out
@@ -620,10 +629,10 @@ Group 3 (next): entry workflow and lock rule
       QMessageBox in messages.py (nothing holding secrets survives a lock); test menus deleted
 - [x] 12 CR-L1 backup rotation sorts by parsed timestamp + counter, not file name
       (same-second backups)
-- [ ] 13 SEC-M3 show "Last saved: <updated_at>" on unlock; keep last-seen updated_at per
+- [x] 13 SEC-M3 show "Last saved: <updated_at>" on unlock; keep last-seen updated_at per
       vault path in settings (timestamp only); warn if the vault goes backwards in time
 
-Group 4: input and key-derivation hardening
+Group 4 (next): input and key-derivation hardening
 - [ ] 14 SEC-Low1 password_policy: NFC first, strip surrounding whitespace and Unicode Cf
       before length/common-list checks (tests: decomposed chars, trailing space, ZWSP)
 - [ ] 15 SEC-Low3 reject Unicode Cf in names, logins, identity fields (ZWJ only if needed

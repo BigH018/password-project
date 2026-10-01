@@ -99,6 +99,11 @@ def show_error(parent: QWidget | None, title: str, text: str) -> None:
     run_modal(message_box(QMessageBox.Critical, title, text, QMessageBox.Ok, parent))
 
 
+def show_warning(parent: QWidget | None, title: str, text: str) -> None:
+    """Modal warning box (plain text)."""
+    run_modal(message_box(QMessageBox.Warning, title, text, QMessageBox.Ok, parent))
+
+
 def confirm(parent: QWidget | None, title: str, text: str, ok_text: str = "OK") -> bool:
     """Modal yes/no question. Returns True only if the user clicks ``ok_text``."""
     box = message_box(QMessageBox.Question, title, text, QMessageBox.Cancel, parent)

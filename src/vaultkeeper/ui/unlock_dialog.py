@@ -21,9 +21,12 @@ from PyQt5.QtWidgets import (
 )
 
 from vaultkeeper.config.constants import WINDOW_TITLE
+from vaultkeeper.config.settings import SettingsFile
+from vaultkeeper.core.vault_disk import remember_saved_at, vault_key, went_back_in_time
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import VaultAuthError, VaultFormatError
-from vaultkeeper.ui.messages import error_text
+from vaultkeeper.ui import messages
+from vaultkeeper.ui.messages import error_text, local_time_text
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
 from vaultkeeper.ui.welcome_dialog import FileChooser, choose_vault_file
@@ -173,3 +176,31 @@ class UnlockDialog(QDialog):
         """Window close button behaves like Quit (never blocked)."""
         self.reject()
         event.accept()
+
+
+# --- after unlocking: "Last saved" and the went-back-in-time check (SEC-M3) ---------------
+OLDER_COPY = (
+    "This vault file was last saved {file_time}, but this PC has already seen a newer "
+    "version (saved {seen_time}).\n\n"
+    "It may be an old copy or a backup that was put back in its place. If you didn't restore "
+    "it on purpose, check your vault and backup files before making changes.")
+
+
+def record_last_saved(settings: SettingsFile, service: VaultService) -> None:
+    """Remember the vault's last-saved time for this PC (a timestamp, nothing secret)."""
+    settings.update(vault_last_saved=remember_saved_at(
+        settings.current.vault_last_saved, service.path, service.data.updated_at))
+
+
+def check_last_saved(parent: QWidget | None, settings: SettingsFile,
+                     service: VaultService) -> str:
+    """Warn once if the vault is older than the version this PC saw last (not when opened
+    from ``.bak``, which is older by design), remember its time, return a status line."""
+    updated = service.data.updated_at
+    seen = settings.current.vault_last_saved.get(vault_key(service.path))
+    if not service.opened_from_backup and seen and went_back_in_time(seen, updated):
+        messages.show_warning(parent, "Older vault file", OLDER_COPY.format(
+            file_time=local_time_text(updated), seen_time=local_time_text(seen)))
+    record_last_saved(settings, service)
+    return f"Last saved: {local_time_text(updated)}." if updated else ""
+

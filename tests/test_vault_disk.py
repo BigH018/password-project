@@ -82,3 +82,33 @@ def test_conflict_check_after_opening_backup_still_quarantines(make_service: Fac
     restored.unlock(MASTER, use_backup=True)
     restored.save()  # no conflict: the damaged main file is copied aside
     assert restored.last_damaged_copy is not None
+
+
+# --- SEC-M3: noticing a vault that went back in time ------------------------------------
+OLDER, NEWER = "2026-09-01T10:00:00+00:00", "2026-10-01T10:00:00+00:00"
+
+
+def test_went_back_in_time() -> None:
+    from vaultkeeper.core.vault_disk import went_back_in_time
+
+    assert went_back_in_time(NEWER, OLDER)
+    assert not went_back_in_time(OLDER, NEWER)
+    assert not went_back_in_time(NEWER, NEWER)
+    assert not went_back_in_time(None, OLDER)  # never seen: nothing to compare
+    assert not went_back_in_time("garbage", OLDER)
+
+
+def test_remember_saved_at_keys_by_path_and_caps(tmp_path: Path) -> None:
+    from vaultkeeper.config.constants import MAX_REMEMBERED_VAULTS
+    from vaultkeeper.core.vault_disk import remember_saved_at, vault_key
+
+    seen: dict[str, str] = {}
+    path = tmp_path / "fake.vault"
+    seen = remember_saved_at(seen, path, OLDER)
+    assert seen == {vault_key(path): OLDER}
+    assert remember_saved_at(seen, tmp_path / "." / "fake.vault", NEWER) == {
+        vault_key(path): NEWER}  # same file, same key
+    for n in range(MAX_REMEMBERED_VAULTS + 5):
+        seen = remember_saved_at(seen, tmp_path / f"v{n}.vault", NEWER)
+    assert len(seen) == MAX_REMEMBERED_VAULTS
+    assert vault_key(tmp_path / f"v{MAX_REMEMBERED_VAULTS + 4}.vault") in seen  # newest kept

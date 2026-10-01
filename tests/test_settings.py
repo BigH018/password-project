@@ -171,3 +171,21 @@ def test_invalid_backup_status_is_ignored(bad: object) -> None:
     assert settings_from_dict({"backup_last_failure": bad}).backup_last_failure is None
     with pytest.raises(ValidationError):
         update_settings(Settings(), backup_last_success=bad)
+
+
+# --- last-saved times per vault (SEC-M3) ----------------------------------------------------
+
+
+def test_vault_last_saved_round_trip(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    seen = {str(tmp_path / "fake.vault"): STAMP}
+    save_settings(path, Settings(vault_last_saved=seen))
+    assert load_settings(path).vault_last_saved == seen
+
+
+@pytest.mark.parametrize("bad", [[], {"x": "yesterday"}, {"": STAMP}, {"x": 5},
+                                 {f"v{n}": STAMP for n in range(100)}])
+def test_invalid_vault_last_saved_is_ignored(bad: object) -> None:
+    assert settings_from_dict({"vault_last_saved": bad}).vault_last_saved == {}
+    with pytest.raises(ValidationError):
+        update_settings(Settings(), vault_last_saved=bad)

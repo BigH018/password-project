@@ -31,7 +31,7 @@ from vaultkeeper.ui.messages import error_text, run_modal
 from vaultkeeper.ui.qt_adapters import QtTaskRunner, VaultInstanceLock
 from vaultkeeper.ui.session_guard import SessionGuard
 from vaultkeeper.ui.settings_dialog import SettingsDialog
-from vaultkeeper.ui.unlock_dialog import UnlockDialog
+from vaultkeeper.ui.unlock_dialog import UnlockDialog, check_last_saved, record_last_saved
 from vaultkeeper.ui.welcome_dialog import WelcomeDialog
 
 log = logging.getLogger(__name__)
@@ -163,6 +163,8 @@ class AppController(QObject):
         )
         self._present_window()
         self._start_backups(self.service)
+        note = check_last_saved(self.window, self.settings, self.service)
+        self.window.statusBar().showMessage(note, 10000)
         self.guard.arm()
 
     def _present_window(self) -> None:
@@ -183,8 +185,9 @@ class AppController(QObject):
                                      s.backup_min_interval_minutes,
                                      last_success=s.backup_last_success,
                                      last_failure=s.backup_last_failure)
-        if self._after_save_backup not in service.on_saved:
-            service.on_saved.append(self._after_save_backup)
+        for listener in (self._after_save_backup, self._remember_last_saved):
+            if listener not in service.on_saved:
+                service.on_saved.append(listener)
         self.window.set_backups_enabled(self.backups.enabled)
         self._backup_status_changed()
 
@@ -203,6 +206,10 @@ class AppController(QObject):
         except VaultKeeperError as exc:
             self.window.statusBar().showMessage(f"Backup failed: {error_text(exc)}", 10000)
         self._backup_status_changed()
+
+    def _remember_last_saved(self) -> None:
+        if self.service is not None and self.service.is_unlocked:
+            record_last_saved(self.settings, self.service)
 
     def _after_save_backup(self) -> None:
         if self.backups is not None:

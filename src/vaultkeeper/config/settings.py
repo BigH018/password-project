@@ -13,7 +13,7 @@ import json
 import logging
 import os
 import string
-from dataclasses import asdict, dataclass, fields, replace
+from dataclasses import asdict, dataclass, field, fields, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -46,6 +46,8 @@ class Settings:
     window_geometry: str | None = None  # Qt saveGeometry() as base64; None = default size
     backup_last_success: str | None = None  # UTC ISO-8601 of the last good backup
     backup_last_failure: str | None = None  # set until a backup succeeds again
+    # Last vault ``updated_at`` this PC saw, per vault path (timestamps only, SEC-M3).
+    vault_last_saved: dict[str, str] = field(default_factory=dict)
 
 
 _INT_RANGES: dict[str, tuple[int, int]] = {
@@ -86,11 +88,20 @@ def _valid_timestamp(value: Any) -> bool:
         return False
 
 
+def _valid_last_saved(value: Any) -> bool:
+    """{vault path: timezone-aware ISO timestamp}, at most c.MAX_REMEMBERED_VAULTS."""
+    return isinstance(value, dict) and len(value) <= c.MAX_REMEMBERED_VAULTS and all(
+        isinstance(k, str) and k and _valid_path(k) and v is not None and _valid_timestamp(v)
+        for k, v in value.items())
+
+
 def _valid_value(name: str, value: Any) -> bool:
     if name == "window_geometry":
         return _valid_geometry(value)
     if name in _TIMESTAMP_FIELDS:
         return _valid_timestamp(value)
+    if name == "vault_last_saved":
+        return _valid_last_saved(value)
     if name in _PATH_FIELDS:
         return _valid_path(value)
     if name in _BOOL_FIELDS:

@@ -7,6 +7,8 @@ main file:
   as ``<vault>.damaged-...`` so it never replaces the good ``.bak``;
 - it changed but still decrypts: another window or program saved it (SEC-M2). The save is
   refused with VaultConflictError, so neither version is silently lost.
+
+It also remembers the last-saved time per vault, to notice an older copy put back (SEC-M3).
 """
 
 from __future__ import annotations
@@ -14,9 +16,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import os
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 
+from vaultkeeper.config import constants as c
 from vaultkeeper.core.serialization import loads_payload
 from vaultkeeper.crypto import envelope
 from vaultkeeper.crypto.header import FileKind
@@ -64,3 +69,36 @@ def quarantine_target(path: Path, key: bytearray, expected: bytes | None,
         log.warning("Vault file changed on disk since it was loaded; save refused")
         raise VaultConflictError()
     return None
+
+
+# --- SEC-M3: a vault file that went back in time ---------------------------------------------
+# The last ``updated_at`` this PC saw for each vault is kept in settings (timestamps only). A
+# vault that opens with an OLDER time may be an old copy or backup put back in its place.
+
+def vault_key(path: Path) -> str:
+    """Stable settings key for a vault file (absolute, case-normalized on Windows)."""
+    return os.path.normcase(str(path.resolve()))
+
+
+def _parse(stamp: str | None) -> datetime | None:
+    if not stamp:
+        return None
+    try:
+        parsed = datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def went_back_in_time(last_seen: str | None, updated_at: str) -> bool:
+    """True if the vault's last-saved time is older than the one this PC saw before."""
+    before, now = _parse(last_seen), _parse(updated_at)
+    return before is not None and now is not None and now < before
+
+
+def remember_saved_at(seen: dict[str, str], path: Path, updated_at: str) -> dict[str, str]:
+    """A copy of ``seen`` with ``path``'s time set (most recent last, oldest dropped)."""
+    key = vault_key(path)
+    updated = {k: v for k, v in seen.items() if k != key}
+    updated[key] = updated_at
+    return dict(list(updated.items())[-c.MAX_REMEMBERED_VAULTS:])

@@ -94,6 +94,7 @@ def no_real_message_boxes(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(messages, "confirm", lambda *_a, **_k: True)
     monkeypatch.setattr(messages, "show_error", lambda *_a, **_k: None)
+    monkeypatch.setattr(messages, "show_warning", lambda *_a, **_k: None)
     monkeypatch.setattr(main_window, "confirm", lambda *_a, **_k: True)
     monkeypatch.setattr(main_window, "show_error", lambda *_a, **_k: None)
 
