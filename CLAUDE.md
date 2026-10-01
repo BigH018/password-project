@@ -86,10 +86,12 @@ VaultKeeper is a **local-only desktop password manager** for a gamer with 150+ a
 ui ──► core ──► crypto, storage
 │        └────► config, errors          (leaf modules: stdlib only)
 └──► security ──► config, errors       (headless; Qt parts injected from ui)
+crypto, storage ──► config, errors     (every layer may use the leaves)
 app.py / main.py wire everything together.
 scripts/recover_vault.py is standalone: it must NOT import vaultkeeper.
 ```
 1. Dependencies flow one way: `ui -> core -> crypto/storage`. Lower layers never import higher ones.
+   `tests/test_architecture.py` enforces this (its `ALLOWED_INTERNAL` table is the source of truth).
 2. **`core`, `crypto`, `storage`, `security`, `config` and `errors` never import PyQt5.**
    Qt pieces (QClipboard, QTimer, worker threads, event filters, Windows session-lock
    notification) live in `ui/qt_adapters.py` and are injected through small Protocols.
@@ -120,7 +122,7 @@ vaultkeeper/                       repo root
   src/vaultkeeper/
     __init__.py                    version string only
     __main__.py                    `python -m vaultkeeper` -> main.main()
-    main.py                        entry point only
+    main.py                        entry point only (prints a notice until Phase 4)
     app.py                    (P)  bootstrap: logging, settings, services, QApplication, lifecycle
     errors.py                      custom exception hierarchy
     config/
@@ -131,7 +133,7 @@ vaultkeeper/                       repo root
     core/
       models.py                    dataclasses: Account, Game, Rank, VaultData (no I/O)
       serialization.py             VaultData <-> JSON dict, schema validation, migrations
-      validation.py                input validation/normalization
+      validation.py                input validation/normalization (~280 lines: split before growing)
       password_policy.py      (P)  master password rules (min 12) + strength hint
       vault_service.py        (P)  create/unlock/lock/save/change password (injected executor)
       account_service.py      (P)  account CRUD + duplicate detection
@@ -183,7 +185,8 @@ vaultkeeper/                       repo root
     test_serialization.py          round trip, schema version, malformed input
     test_validation.py             limits, control chars, URL schemes
     test_constants.py              preset consistency (divisions, tiers, regions)
-    test_settings.py               load/save, defaults, corrupt file handling
+    test_settings.py               load/save, defaults, corrupt file handling, paths
+    test_logging_setup.py          redaction, exceptions logged without messages
     test_header.py, test_kdf.py, test_cipher.py, test_envelope.py, test_vault_file.py  (P)
     test_vault_service.py, test_password_policy.py, test_recover_script.py            (P)
     test_accounts.py, test_games.py, test_search.py                                    (P)
@@ -349,10 +352,14 @@ python -m vaultkeeper  # run the app
 - TOTP stays optional. The user accepts the same-vault trade-off.
 - Settings JSON lives in `%APPDATA%\VaultKeeper\` and holds no secrets.
 - Commit after each approved phase, with plain messages.
+- Rank division is optional (a tier can be stored without one). Loading a vault checks
+  structure only, not presets, so preset changes never stop an old vault from opening.
+- An account needs at least one identifier: login username, in-game name or email.
+- `pyproject.toml` reads dependencies from `requirements.txt` (single source of pins).
 
 ### Status
 - [x] Step 0: CLAUDE.md + plan approved
-- [ ] Phase 1: Scaffold, config, models
+- [x] Phase 1: Scaffold, config, models (awaiting review)
 - [ ] Phase 2: Crypto, storage, vault service, recovery script
 - [ ] Phase 3: Account/game services, search
 - [ ] Phase 4: Core UI

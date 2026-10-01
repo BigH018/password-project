@@ -1,0 +1,19 @@
+# Development / test / packaging dependencies, pinned exactly (checked against PyPI 2026-10-01).
+# Install together with requirements.txt.
+# Direct dependencies
+pytest==9.1.1
+pytest-qt==4.5.0
+ruff==0.16.9
+pyinstaller==6.22.3
+
+# Transitive dependencies
+iniconfig==2.3.0
+packaging==26.3
+pluggy==1.6.0
+Pygments==2.21.0
+typing_extensions==4.16.0
+altgraph==0.17.5
+pyinstaller-hooks-contrib==2026.8
+colorama==0.4.6 ; sys_platform == "win32"
+pefile==2024.8.26 ; sys_platform == "win32"
+pywin32-ctypes==0.2.3 ; sys_platform == "win32"

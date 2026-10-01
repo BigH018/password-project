@@ -1,1 +1,29 @@
+# Claude Code local settings
 .claude/
+
+# --- Real data: never commit ---
+*.vault
+*.vault.*
+backups/
+exports/
+.env
+.env.*
+*.log
+logs/
+
+# --- Python ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Build output ---
+build/
+dist/
+# PyInstaller writes a spec to the root by default; ours lives in packaging/
+/*.spec

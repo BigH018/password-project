@@ -1,0 +1,13 @@
+# Runtime dependencies, pinned exactly (checked against PyPI 2026-10-01).
+# Direct dependencies
+PyQt5==5.15.11
+argon2-cffi==25.1.0
+cryptography==50.0.2
+pyotp==2.10.0
+
+# Transitive dependencies
+PyQt5-Qt5==5.15.2
+PyQt5-sip==12.19.0
+argon2-cffi-bindings==26.1.0
+cffi==2.1.1
+pycparser==3.0
