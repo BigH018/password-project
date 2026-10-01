@@ -114,6 +114,7 @@ scripts/recover_vault.py is standalone: it must NOT import vaultkeeper.
 vaultkeeper/                       repo root
   CLAUDE.md                        this rulebook
   README.md                        GitHub front page: features, setup, shortcuts, security, FAQ
+  LICENSE                          MIT, copyright BigH
   requirements.txt                 pinned runtime deps
   requirements-dev.txt             pinned dev deps (pytest, pytest-qt, ruff, pyinstaller)
   pyproject.toml                   package metadata (src layout), pytest + ruff config

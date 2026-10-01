@@ -15,6 +15,7 @@ encrypted file on your own PC. No cloud, no sync, no network: ever.
 ![Crypto](https://img.shields.io/badge/crypto-Argon2id%20%2B%20AES--256--GCM-8A2BE2)
 ![Network](https://img.shields.io/badge/network-none-success)
 ![Tests](https://img.shields.io/badge/tests-1000%2B%20passing-success)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
 <img src="docs/images/main-window.png" alt="Main window with fake demo accounts" width="900">
 
@@ -39,6 +40,7 @@ encrypted file on your own PC. No cloud, no sync, no network: ever.
 - [Development](#development)
 - [Roadmap](#roadmap)
 - [FAQ](#faq)
+- [License](#license)
 
 ---
 
@@ -370,3 +372,12 @@ and the previous version is kept as `.bak`.
 **Is it safe to keep backups on a cloud drive?**
 Backups are encrypted exactly like the vault, so a copy on a cloud drive is protected by
 your master password. Keeping one on a separate physical drive is still recommended.
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE). Copyright (c) 2026 BigH.
+
+Provided "as is", without warranty of any kind. You are responsible for keeping your master
+password and backups safe.
