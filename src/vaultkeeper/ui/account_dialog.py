@@ -28,14 +28,16 @@ class AccountDialog(QDialog):
         super().__init__(parent)
         self._accounts = accounts
         self._is_new = account is None
+        # New account without a game context (e.g. "All games" selected): make the user pick.
+        must_choose = self._is_new and default_game_id is None and len(games) > 1
         game_id = default_game_id or (games[0].id if games else "")
         self._base = account if account is not None else accounts.new_draft(game_id)
         self.saved: Account | None = None
         self.setWindowTitle("Add account" if self._is_new else "Edit account")
         self.setMinimumWidth(520)
 
-        self.form = AccountForm(games, self)
-        self.form.load(self._base)
+        self.form = AccountForm(games, require_game_choice=must_choose, parent=self)
+        self.form.load(self._base, select_game=not must_choose)
         self.duplicate_label = QLabel(self)
         self.duplicate_label.setStyleSheet(DUPLICATE_STYLE)
         self.duplicate_label.setWordWrap(True)
@@ -60,7 +62,7 @@ class AccountDialog(QDialog):
         self.save_button.clicked.connect(self._save)
         self.cancel_button.clicked.connect(self.reject)
         self._update_duplicates()
-        self.form.display_name.setFocus()
+        (self.form.game if must_choose else self.form.display_name).setFocus()
 
     # --- change tracking ----------------------------------------------------------------
 
@@ -94,6 +96,10 @@ class AccountDialog(QDialog):
     # --- saving -------------------------------------------------------------------------
 
     def _save(self) -> None:
+        if not self.form.has_game:
+            self.error_label.setText("Choose a game first.")
+            self.form.game.setFocus()
+            return
         draft = self._snapshot()
         try:
             stored = self._accounts.add(draft) if self._is_new else self._accounts.update(draft)

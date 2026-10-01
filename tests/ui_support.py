@@ -80,3 +80,18 @@ def existing_vault(vault_path: Path) -> Path:
     svc.save()
     svc.lock()
     return vault_path
+
+
+@pytest.fixture(autouse=True)
+def no_real_message_boxes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Never open a real modal box in tests (one left open at teardown crashes Qt).
+
+    Default: confirmations say yes, errors are swallowed. Tests that check a prompt override
+    these with their own monkeypatch.
+    """
+    from vaultkeeper.ui import main_window, messages
+
+    monkeypatch.setattr(messages, "confirm", lambda *_a, **_k: True)
+    monkeypatch.setattr(messages, "show_error", lambda *_a, **_k: None)
+    monkeypatch.setattr(main_window, "confirm", lambda *_a, **_k: True)
+    monkeypatch.setattr(main_window, "show_error", lambda *_a, **_k: None)

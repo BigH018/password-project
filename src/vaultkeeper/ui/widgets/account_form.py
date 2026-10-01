@@ -27,10 +27,13 @@ class AccountForm(QWidget):
 
     changed = pyqtSignal()
 
-    def __init__(self, games: list[Game], parent: Any = None) -> None:
+    def __init__(self, games: list[Game], require_game_choice: bool = False,
+                 parent: Any = None) -> None:
         super().__init__(parent)
         self._games = {g.id: g for g in games}
         self.game = QComboBox(self)
+        if require_game_choice:  # no silent default: the user picks the game explicitly
+            self.game.addItem("Choose a game...", None)
         for game in games:
             self.game.addItem(game.name, game.id)
         self.display_name = QLineEdit(self)
@@ -94,23 +97,35 @@ class AccountForm(QWidget):
 
     def _game_changed(self) -> None:
         game = self._current_game()
+        self.region.setEnabled(game is not None)
+        self.rank.setEnabled(game is not None)
         if game is not None:
             preset = get_preset(game.preset)
             self.region.set_preset(preset)
             self.rank.set_preset(preset)
         self.changed.emit()
 
+    @property
+    def has_game(self) -> bool:
+        """Whether a real game (not the "Choose a game..." placeholder) is selected."""
+        return self._current_game() is not None
+
     # --- load / read --------------------------------------------------------------------
 
-    def load(self, account: Account) -> None:
-        """Fill every field from ``account``."""
+    def load(self, account: Account, select_game: bool = True) -> None:
+        """Fill every field from ``account``. With ``select_game=False`` the game stays on
+        the "Choose a game..." placeholder and rank/region wait for a choice."""
         self.game.blockSignals(True)
-        self.game.setCurrentIndex(max(self.game.findData(account.game_id), 0))
+        self.game.setCurrentIndex(max(self.game.findData(account.game_id), 0) if select_game
+                                  else 0)
         self.game.blockSignals(False)
         game = self._current_game()
-        preset = get_preset(game.preset if game else "")
-        self.region.set_preset(preset, keep=account.region, use_current=False)
-        self.rank.set_preset(preset, keep=account.rank)
+        self.region.setEnabled(game is not None)
+        self.rank.setEnabled(game is not None)
+        if game is not None:
+            preset = get_preset(game.preset)
+            self.region.set_preset(preset, keep=account.region, use_current=False)
+            self.rank.set_preset(preset, keep=account.rank)
         self.display_name.setText(account.display_name)
         self.tag.setText(account.tag or "")
         self.login.setText(account.login_username)
@@ -127,7 +142,7 @@ class AccountForm(QWidget):
         """``base`` with the form's values (raw; core validates and normalizes)."""
         return replace(
             base,
-            game_id=self.game.currentData() or base.game_id,
+            game_id=self.game.currentData() or "",  # "" = no game chosen yet
             display_name=self.display_name.text(),
             tag=self.tag.text() or None,
             login_username=self.login.text(),

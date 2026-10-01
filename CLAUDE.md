@@ -406,6 +406,10 @@ python -m vaultkeeper  # run the app
 - Account dialog: rank/region are preset dropdowns (free text for custom games). A stored
   value not in the preset is shown marked "(not in this game's list)" rather than dropped.
   After saving, the edited/new row stays selected.
+- No silent default game: adding from "All games" starts on "Choose a game..." (rank and
+  region disabled until chosen); a selected sidebar game is pre-filled.
+- UI tests stub `messages.confirm`/`show_error` by default (`tests/ui_support.py`): a real
+  modal box left open at teardown crashes Qt.
 - Delete key only deletes while the account table has focus. Edit has no keyboard shortcut
   (rows open on double-click/Enter in 4c) so Enter in text fields is never hijacked.
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,

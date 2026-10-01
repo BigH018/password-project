@@ -36,6 +36,8 @@ def _open(qtbot: Any, accounts: AccountService, games: list[Game], **kw: Any) ->
 
 def _fill_basic(dialog: ad.AccountDialog, login: str = "fake_login_x") -> None:
     form = dialog.form
+    if not form.has_game:
+        form.game.setCurrentIndex(1)  # first real game after the placeholder
     form.display_name.setText("FakeAlt")
     form.tag.setText("TEST")
     form.login.setText(login)
@@ -84,6 +86,7 @@ def test_duplicate_warning_does_not_block(qtbot: Any, accounts: AccountService,
     first.save_button.click()
 
     second = _open(qtbot, accounts, games)
+    second.form.game.setCurrentIndex(second.form.game.findData(games[0].id))
     assert second.duplicate_label.text() == ""
     second.form.login.setText("SHARED_LOGIN")
     assert "same login" in second.duplicate_label.text()
@@ -153,3 +156,30 @@ def test_game_change_switches_pickers(qtbot: Any, accounts: AccountService,
     dialog.form.game.setCurrentIndex(dialog.form.game.findData(games[1].id))
     assert dialog.form.region.combo.findData("Europe") > 0
     assert dialog.form.rank.tier.findData("Champion") > 0
+
+
+def test_no_silent_default_game_from_all_games_view(qtbot: Any, accounts: AccountService,
+                                                    games: list[Game]) -> None:
+    """Regression: with "All games" selected, Add used to pick the first game silently."""
+    dialog = _open(qtbot, accounts, games)  # no default_game_id
+    assert dialog.form.game.currentText() == "Choose a game..."
+    assert not dialog.form.rank.isEnabled() and not dialog.form.region.isEnabled()
+    dialog.form.login.setText("fake_login_x")  # fill by hand: _fill_basic would pick a game
+    dialog.form.display_name.setText("FakeAlt")
+    dialog.save_button.click()
+    assert dialog.error_label.text() == "Choose a game first."
+    assert accounts.list_all() == []
+
+    dialog.form.game.setCurrentIndex(dialog.form.game.findData(games[1].id))
+    assert dialog.form.rank.isEnabled()
+    assert dialog.form.rank.tier.findData("Champion") > 0  # a dropdown, not free text
+    dialog.save_button.click()
+    assert dialog.result() == QDialog.Accepted
+    assert accounts.list_all()[0].game_id == games[1].id
+
+
+def test_game_preselected_when_viewing_a_game(qtbot: Any, accounts: AccountService,
+                                              games: list[Game]) -> None:
+    dialog = _open(qtbot, accounts, games, default_game_id=games[1].id)
+    assert dialog.form.game.currentData() == games[1].id
+    assert dialog.form.game.findData(None) == -1  # no placeholder needed
