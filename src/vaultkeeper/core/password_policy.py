@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass
 
 from vaultkeeper.config.constants import MASTER_PASSWORD_MIN_LENGTH
-from vaultkeeper.core.validation import clean_secret
+from vaultkeeper.core.text_validation import clean_secret
 from vaultkeeper.errors import ValidationError, WeakPasswordError
 
 MIN_DISTINCT_CHARS = 5

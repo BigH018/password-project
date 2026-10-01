@@ -34,10 +34,10 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 |---|---|---|
 | Crypto, KDF, vault format | docs/VAULT_FORMAT.md, crypto/*, storage/vault_file.py, errors.py | scripts/recover_vault.py (must stay in sync with the format); tests/test_header, test_kdf, test_cipher, test_envelope, test_vault_file, test_recover_script |
 | Vault lifecycle (create, unlock, lock, change password) | core/vault_service.py, core/password_policy.py, errors.py, core/serialization.py | crypto/ signatures, tests/test_vault_service.py, test_password_policy.py |
-| Accounts, games, search, duplicates | docs/DATA_MODEL.md, core/models.py, the relevant service (account_service, game_service or search), core/store.py, core/validation.py | matching test file, tests/conftest.py (FakeStore) |
+| Accounts, games, search, duplicates | docs/DATA_MODEL.md, core/models.py, the relevant service (account_service, game_service or search), core/store.py, core/validation.py | core/text_validation.py, matching test file, tests/conftest.py (FakeStore) |
 | Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/serialization.py, config/constants.py, tests/test_serialization.py | grep ui/ for the field to see where it is displayed |
 | A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/qt_adapters.py, and signatures of the services it calls | ui/styles/dark.qss for visual work |
-| Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures | tests/test_paste_assist.py, test_entry_session.py |
+| Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures, core/validation.py signatures | tests/test_paste_assist.py, test_entry_session.py |
 | Clipboard, auto-lock, session lock | security/*, ui/qt_adapters.py | tests/test_clipboard.py, test_autolock.py |
 | Backups, export | core/backup.py, core/exporter.py, storage/vault_file.py | docs/VAULT_FORMAT.md |
 | Password generator, TOTP | core/generator.py or core/totp.py, and the matching dialog | matching test file |
@@ -134,7 +134,8 @@ vaultkeeper/                       repo root
     core/
       models.py                    dataclasses: Account, Game, Rank, VaultData (no I/O)
       serialization.py             VaultData <-> JSON dict, schema validation, migrations
-      validation.py                input validation/normalization (~290 lines: split before growing)
+      text_validation.py           generic text/secret/email/URL/uuid checks (clean_* helpers)
+      validation.py                field rules (names, tags, labels, presets, ranks, TOTP) + validate_account
       store.py                     VaultStore protocol + apply_change (save or roll back in memory)
       password_policy.py           master password rules (min 12) + strength hint
       vault_service.py             create/unlock/lock/save/change password, TaskRunner (~285 lines)
@@ -185,7 +186,8 @@ vaultkeeper/                       repo root
     test_no_network.py             flows run with sockets blocked
     test_models.py                 model invariants, repr hides secrets
     test_serialization.py          round trip, schema version, malformed input
-    test_validation.py             limits, control chars, URL schemes
+    test_text_validation.py        limits, control/bidi chars, secrets untouched, email, URL
+    test_validation.py             field rules, presets, ranks, whole-account validation
     test_constants.py              preset consistency (divisions, tiers, regions)
     test_settings.py               load/save, defaults, corrupt file handling, paths
     test_logging_setup.py          redaction, exceptions logged without messages
@@ -379,7 +381,8 @@ python -m vaultkeeper  # run the app
 - [x] Step 0: CLAUDE.md + plan approved
 - [x] Phase 1: Scaffold, config, models
 - [x] Phase 2: Crypto, storage, vault service, recovery script (pushed 9372fb1)
-- [x] Phase 3: Account/game services, search (awaiting review)
+- [x] Phase 3: Account/game services, search (committed 0bc7cc3; validation split into
+      text_validation.py + validation.py)
 - [ ] Phase 4: Core UI
 - [ ] Phase 5: Clipboard, auto-lock, generator, export, backups
 - [ ] Phase 6: Quick Add, batch mode, paste assist

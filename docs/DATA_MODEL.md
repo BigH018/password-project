@@ -32,7 +32,7 @@ Account-level rules (`validate_account`):
 - `display_name` must not contain `#`. A `tag` needs a `display_name`.
 - Secrets are never stripped or normalized. Other text is NFC-normalized and stripped.
 
-Length limits and character rules live in `core/validation.py` (control characters are
+Length limits live in `config/constants.py`; character rules in `core/text_validation.py` (control characters are
 rejected, except newlines in notes).
 
 ## Rank

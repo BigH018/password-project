@@ -1,4 +1,4 @@
-"""Input validation: limits, control characters, secrets untouched, field rules, whole account."""
+"""Field rules (names, tags, labels, presets, ranks, TOTP) and whole-account validation."""
 
 from __future__ import annotations
 
@@ -8,95 +8,12 @@ import pytest
 
 from fake_data import make_account, make_game
 from vaultkeeper.config import constants as c
+from vaultkeeper.core import text_validation as t
 from vaultkeeper.core import validation as v
 from vaultkeeper.core.models import Rank
 from vaultkeeper.errors import ValidationError
 
-# --- Text -------------------------------------------------------------------------------------
-
-
-def test_clean_text_strips_and_normalizes() -> None:
-    assert v.clean_text("  Cafe\u0301  ", "f", 20) == "Caf\u00e9"
-
-
-@pytest.mark.parametrize("bad", ["a\x00b", "a\x1bb", "a\nb", "a\u202eb", "\ufeffab", "a\x7fb"])
-def test_clean_text_rejects_control_and_bidi(bad: str) -> None:
-    with pytest.raises(ValidationError):
-        v.clean_text(bad, "f", 50)
-
-
-def test_multiline_allows_newlines_and_normalizes_crlf() -> None:
-    assert v.clean_text("line1\r\nline2\tx", "notes", 50, multiline=True) == "line1\nline2\tx"
-
-
-def test_length_limit_and_required() -> None:
-    with pytest.raises(ValidationError):
-        v.clean_text("x" * 11, "f", 10)
-    with pytest.raises(ValidationError):
-        v.clean_text("   ", "f", 10, required=True)
-    with pytest.raises(ValidationError):
-        v.clean_text(123, "f", 10)
-
-
-def test_error_message_never_contains_value() -> None:
-    secret_looking = "Fake-Secret\x00Value"
-    with pytest.raises(ValidationError) as info:
-        v.clean_secret(secret_looking, "password")
-    assert "Fake-Secret" not in str(info.value)
-    assert info.value.field == "password"
-
-
-def test_emoji_names_allowed() -> None:
-    # Zero-width joiner (category Cf) is used inside emoji and must not be rejected.
-    assert v.clean_text("Pro\U0001f469\u200d\U0001f4bb", "display_name", 64)
-
-
-# --- Secrets ----------------------------------------------------------------------------------
-
-
-def test_secret_is_not_stripped_or_normalized() -> None:
-    raw = "  Cafe\u0301 pass "
-    assert v.clean_secret(raw, "password") == raw
-
-
-@pytest.mark.parametrize("bad", ["pa\nss", "pa\x00ss", "pa\u202ess"])
-def test_secret_rejects_controls(bad: str) -> None:
-    with pytest.raises(ValidationError):
-        v.clean_secret(bad, "password")
-
-
-def test_secret_length_limit() -> None:
-    v.clean_secret("x" * c.MAX_SECRET, "password")
-    with pytest.raises(ValidationError):
-        v.clean_secret("x" * (c.MAX_SECRET + 1), "password")
-
-
-def test_optional_secret_empty_is_none() -> None:
-    assert v.clean_optional_secret("", "email_password") is None
-    assert v.clean_optional_secret(None, "email_password") is None
-
-
 # --- Fields -----------------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("good", ["a@example.test", "first.last+alt@mail.example.com"])
-def test_email_valid(good: str) -> None:
-    assert v.clean_email(f" {good} ", "email") == good
-
-
-@pytest.mark.parametrize("bad", ["no-at-sign", "a@b", "a@@example.test", "a b@example.test"])
-def test_email_invalid(bad: str) -> None:
-    with pytest.raises(ValidationError):
-        v.clean_email(bad, "email")
-
-
-def test_url_rules() -> None:
-    assert v.clean_url("https://mail.example.test/login", "u") == "https://mail.example.test/login"
-    assert v.clean_url("", "u") is None
-    for bad in ("javascript:alert(1)", "file:///C:/x", "ftp://example.test", "https://",
-                "https://exa mple.test", "mail.example.test"):
-        with pytest.raises(ValidationError):
-            v.clean_url(bad, "u")
 
 
 def test_display_name_rejects_hash() -> None:
@@ -185,9 +102,9 @@ def test_totp_secret() -> None:
 
 def test_uuid_and_preset_and_game_name() -> None:
     with pytest.raises(ValidationError):
-        v.clean_uuid("not-a-uuid", "id")
+        t.clean_uuid("not-a-uuid", "id")
     with pytest.raises(ValidationError):
-        v.clean_uuid("6F9619FF-8B86-D011-B42D-00C04FC964FF", "id")  # non-canonical case
+        t.clean_uuid("6F9619FF-8B86-D011-B42D-00C04FC964FF", "id")  # non-canonical case
     assert v.clean_preset_key("overwatch") == "overwatch"
     with pytest.raises(ValidationError):
         v.clean_preset_key("fortnite")
