@@ -78,25 +78,40 @@ class BackupService:
     # --- naming -----------------------------------------------------------------------------
 
     def _pattern(self) -> re.Pattern[str]:
-        return re.compile(rf"^{re.escape(self._vault.stem)}-backup-\d{{8}}-\d{{6}}(-\d+)?"
+        return re.compile(rf"^{re.escape(self._vault.stem)}-backup-(\d{{8}}-\d{{6}})(?:-(\d+))?"
                           rf"{re.escape(VAULT_EXTENSION)}$")
 
+    def _order(self, path: Path) -> tuple[str, int]:
+        """(timestamp, counter) of one of this vault's backups. The first of a second is 1.
+
+        File names don't sort correctly ("-10" before "-2", "-2" before the first), so
+        rotation must never rely on name order.
+        """
+        match = self._pattern().match(path.name)
+        assert match is not None  # noqa: S101 - only called for listed backups
+        return match.group(1), int(match.group(2) or 1)
+
     def list_backups(self) -> list[Path]:
-        """This vault's backups in the folder, oldest first."""
+        """This vault's backups in the folder, oldest first (by timestamp, then counter)."""
         if self.backup_dir is None or not self.backup_dir.is_dir():
             return []
         pattern = self._pattern()
-        return sorted(p for p in self.backup_dir.iterdir() if pattern.match(p.name))
+        return sorted((p for p in self.backup_dir.iterdir() if pattern.match(p.name)),
+                      key=self._order)
 
     def _target(self) -> Path:
+        """A new name that sorts after every existing backup made in the same second."""
         assert self.backup_dir is not None  # noqa: S101 - checked by callers
-        base = f"{self._vault.stem}-backup-{self._stamp()}"
-        target = self.backup_dir / f"{base}{VAULT_EXTENSION}"
-        counter = 2
-        while target.exists():
-            target = self.backup_dir / f"{base}-{counter}{VAULT_EXTENSION}"
+        stamp = self._stamp()
+        base = f"{self._vault.stem}-backup-{stamp}"
+        same_second = [n for s, n in map(self._order, self.list_backups()) if s == stamp]
+        counter = max(same_second, default=0) + 1
+        while True:
+            suffix = "" if counter == 1 else f"-{counter}"
+            target = self.backup_dir / f"{base}{suffix}{VAULT_EXTENSION}"
+            if not target.exists():
+                return target
             counter += 1
-        return target
 
     # --- actions ----------------------------------------------------------------------------
 

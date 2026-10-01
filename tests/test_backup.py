@@ -213,3 +213,24 @@ def test_lock_time_failure_is_recorded(vault: VaultService, tmp_path: Path,
     with pytest.raises(VaultIOError):
         backups.on_lock_or_exit()
     assert backups.last_failure is not None
+
+
+# --- CR-L1: rotation follows the timestamp and counter, not the file name -----------------
+
+
+def test_same_second_backups_rotate_oldest_first(vault: VaultService, tmp_path: Path) -> None:
+    backups = BackupService(vault.path, tmp_path / "bk", keep=3, min_interval_minutes=0,
+                            stamp=lambda: "20260101-000001")
+    made = [backups.backup_now() for _ in range(11)]  # base, -2, ..., -11 in one second
+    assert made[0].name == "my-backup-20260101-000001.vault"
+    assert made[10].name == "my-backup-20260101-000001-11.vault"
+    assert backups.list_backups() == made[-3:]  # the newest three, oldest first
+
+
+def test_rotation_orders_across_seconds_and_counters(vault: VaultService,
+                                                     tmp_path: Path) -> None:
+    stamps = iter(["20260101-000009", "20260101-000009", "20260101-000010"])
+    backups = BackupService(vault.path, tmp_path / "bk", keep=10, min_interval_minutes=0,
+                            stamp=lambda: next(stamps))
+    made = [backups.backup_now() for _ in range(3)]
+    assert backups.list_backups() == made

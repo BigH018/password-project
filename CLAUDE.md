@@ -517,7 +517,8 @@ python -m vaultkeeper  # run the app
 - Auto-lock: inactivity (default 5 min), minimize, Windows session lock (WTS notification).
   Locking clears our clipboard copy and backs up if anything changed.
 - Backups are byte copies of the encrypted vault (same master password), named
-  `<vault>-backup-YYYYMMDD-HHMMSS.vault`; rotation only touches this vault's backups. A
+  `<vault>-backup-YYYYMMDD-HHMMSS[-N].vault`; rotation only touches this vault's backups and
+  orders them by parsed timestamp + counter (never by file name; CR-L1). A
   "backups are off" banner shows until a folder is chosen. Demo backups stay in the demo folder.
 - A cancelled export writes nothing (checked after the KDF, before writing).
 - UI tests: `QApplication.quit` is a no-op (`tests/ui_support.py`); a controller quitting
@@ -617,7 +618,7 @@ Group 3 (next): entry workflow and lock rule
       or save)
 - [x] 11 CR-M4 deleteLater() on context menus after exec_() (copy_actions.py) and on the
       QMessageBox in messages.py (nothing holding secrets survives a lock); test menus deleted
-- [ ] 12 CR-L1 backup rotation sorts by parsed timestamp + counter, not file name
+- [x] 12 CR-L1 backup rotation sorts by parsed timestamp + counter, not file name
       (same-second backups)
 - [ ] 13 SEC-M3 show "Last saved: <updated_at>" on unlock; keep last-seen updated_at per
       vault path in settings (timestamp only); warn if the vault goes backwards in time
