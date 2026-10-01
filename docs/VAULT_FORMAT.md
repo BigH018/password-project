@@ -40,6 +40,10 @@ All integers are **big-endian** and unsigned. The file is `header || ciphertext_
    output length **32 bytes**. In Python: `argon2.low_level.hash_secret_raw(..., type=Type.ID)`.
 5. Use those 32 bytes as the AES-256-GCM key.
 
+A password that can't be encoded as UTF-8 (a lone surrogate) is treated as a wrong password
+(`VaultAuthError`, never echoing the character). If Argon2 itself fails (for example not
+enough free memory), `kdf.py` raises `KeyDerivationError` with a friendly fixed message.
+
 NFC exists because the same visible password (e.g. `é`) can be typed as one code point or as
 `e` plus a combining accent, depending on keyboard or IME. Without normalization the two would
 derive different keys and the vault wouldn't open. `crypto/kdf.py` and

@@ -174,3 +174,23 @@ def test_other_vault_file_link(qtbot: Any, existing_vault: Path, make_qt_service
     dialog.other_button.click()
     assert dialog.other_vault_path == tmp_path / "restored.vault"
     assert dialog.result() == QDialog.Rejected
+
+
+def test_low_memory_shows_a_friendly_message(qtbot: Any, existing_vault: Path,
+                                             make_qt_service: Factory,
+                                             qt_runner: QtTaskRunner,
+                                             monkeypatch: pytest.MonkeyPatch) -> None:
+    """SEC-Low4: Argon2 failing (e.g. low memory) isn't "wrong password" or a crash notice."""
+    from argon2.exceptions import HashingError
+
+    from vaultkeeper.crypto import kdf
+
+    def low_memory(**_kw: object) -> bytes:
+        raise HashingError("Memory allocation error")
+
+    monkeypatch.setattr(kdf, "hash_secret_raw", low_memory)
+    dialog = _dialog(qtbot, make_qt_service(kdf=kdf.derive_key), qt_runner)
+    _submit(dialog, MASTER)
+    qtbot.waitUntil(lambda: bool(dialog.error_label.text()), timeout=5000)
+    assert "memory" in dialog.error_label.text() and dialog.error_label.text() != AUTH_FAILED
+    assert dialog.isVisible()

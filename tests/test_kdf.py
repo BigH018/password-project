@@ -82,3 +82,32 @@ def test_is_weaker_than() -> None:
 @pytest.mark.slow
 def test_production_params_derive() -> None:
     assert len(kdf.derive_key("fake passphrase", SALT, DEFAULT_KDF_PARAMS)) == kdf.KEY_LEN
+
+
+# --- SEC-Low4/5: library failures become our errors, never echoing the password ------------
+
+
+def test_argon2_failure_becomes_a_friendly_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from argon2.exceptions import HashingError
+
+    from vaultkeeper.errors import KeyDerivationError
+
+    def low_memory(**_kw: object) -> bytes:
+        raise HashingError("Memory allocation error")
+
+    monkeypatch.setattr(kdf, "hash_secret_raw", low_memory)
+    with pytest.raises(KeyDerivationError) as info:
+        kdf.derive_key("Fake-Passw0rd-1!", b"s" * 16, FAST_KDF)
+    assert "memory" in str(info.value).lower()
+    assert "allocation" not in str(info.value)  # the library message isn't passed on
+    assert info.value.__cause__ is None and info.value.__suppress_context__
+
+
+def test_lone_surrogate_is_a_wrong_password_without_echo() -> None:
+    from vaultkeeper.errors import VaultAuthError
+
+    lone = chr(0xD800)
+    with pytest.raises(VaultAuthError) as info:
+        kdf.derive_key(f"Fake{lone}pass", b"s" * 16, FAST_KDF)
+    assert lone not in str(info.value) and "surrogate" not in str(info.value)
+    assert info.value.__cause__ is None and info.value.__suppress_context__

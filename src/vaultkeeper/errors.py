@@ -79,3 +79,13 @@ class VaultConflictError(VaultKeeperError):
             "The vault file was changed by another program or Account Manager window since "
             "you unlocked it, so nothing was saved. Lock and unlock to load the latest version."
         )
+
+
+class KeyDerivationError(VaultKeeperError):
+    """Argon2 itself failed (most likely not enough free memory). Not a wrong password."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "There isn't enough free memory to process the master password. Close some other "
+            "programs and try again."
+        )

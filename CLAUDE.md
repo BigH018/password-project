@@ -373,7 +373,8 @@ account data. Duplicate check is a warning only: same game and the same login or
   `VaultAuthError` (wrong password **or** tamper, deliberately the same), `VaultLockedError`,
   `VaultIOError`, `ValidationError` (field name, never the value), `WeakPasswordError`,
   `NotFoundError`, `DuplicateGameError`, `GameInUseError`, `VaultConflictError` (file changed
-  on disk since it was loaded; save refused).
+  on disk since it was loaded; save refused), `KeyDerivationError` (Argon2 failed, e.g. low
+  memory; friendly fixed message).
 - Translate library exceptions at layer boundaries. Use `from None` when chaining could leak data.
 - The UI shows generic text via `ui/messages.py`. Unexpected errors go to a top-level hook
   that logs type and location only, then `ui/error_dialog.py` shows a generic notice (the
@@ -645,7 +646,7 @@ Group 4 (in progress): input and key-derivation hardening
       before length/common-list checks (tests: decomposed chars, trailing space, ZWSP)
 - [x] 15 SEC-Low3 reject Unicode Cf in names, logins, identity fields (ZWJ only if needed
       for emoji: tell the user); tests for LRM, RLM, ZWSP, word joiner, soft hyphen, tag chars
-- [ ] 16 SEC-Low4/5 Argon2 HashingError (e.g. low memory) -> clear VaultKeeperError; lone
+- [x] 16 SEC-Low4/5 Argon2 HashingError (e.g. low memory) -> clear VaultKeeperError; lone
       surrogates (UnicodeEncodeError) in kdf.py -> VaultAuthError without echoing the char
 - [ ] 17 SEC-Low7 temp files opened exclusively (O_EXCL, no symlink following) in
       vault_file.py and the settings writer; warn (don't block) at create/open if the folder

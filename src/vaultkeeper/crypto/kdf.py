@@ -9,9 +9,10 @@ import secrets
 import unicodedata
 from dataclasses import dataclass
 
+from argon2.exceptions import HashingError
 from argon2.low_level import Type, hash_secret_raw
 
-from vaultkeeper.errors import VaultFormatError
+from vaultkeeper.errors import KeyDerivationError, VaultAuthError, VaultFormatError
 
 KEY_LEN = 32
 SALT_LEN = 16
@@ -65,9 +66,14 @@ def encode_password(password: str) -> bytes:
     """Normalize to NFC and encode as UTF-8.
 
     The same visible password can arrive in different Unicode forms depending on keyboard
-    or IME. NFC makes it derive the same key every time.
+    or IME. NFC makes it derive the same key every time. A string that can't be UTF-8
+    (a lone surrogate) can't be anyone's password: it is reported as a wrong password,
+    without echoing the character.
     """
-    return unicodedata.normalize("NFC", password).encode("utf-8")
+    try:
+        return unicodedata.normalize("NFC", password).encode("utf-8")
+    except UnicodeEncodeError:
+        raise VaultAuthError() from None
 
 
 def derive_key(password: str, salt: bytes, params: KdfParams) -> bytearray:
@@ -75,15 +81,19 @@ def derive_key(password: str, salt: bytes, params: KdfParams) -> bytearray:
     check_params(params)
     if len(salt) != SALT_LEN:
         raise VaultFormatError("Vault salt has the wrong length.")
-    raw = hash_secret_raw(
-        secret=encode_password(password),
-        salt=salt,
-        time_cost=params.time_cost,
-        memory_cost=params.memory_kib,
-        parallelism=params.parallelism,
-        hash_len=KEY_LEN,
-        type=Type.ID,
-    )
+    secret = encode_password(password)
+    try:
+        raw = hash_secret_raw(
+            secret=secret,
+            salt=salt,
+            time_cost=params.time_cost,
+            memory_cost=params.memory_kib,
+            parallelism=params.parallelism,
+            hash_len=KEY_LEN,
+            type=Type.ID,
+        )
+    except HashingError:
+        raise KeyDerivationError() from None
     return bytearray(raw)
 
 
