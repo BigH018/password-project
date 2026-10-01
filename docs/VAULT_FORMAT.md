@@ -114,8 +114,8 @@ newer versions. Migrations live in `core/migrations.py` as `migrate_vN_to_vN+1`,
    the normal rotation. Test: `test_save_after_opening_backup_keeps_good_bak_and_damaged_copy`.
    Enforced in core: `VaultService.unlock()` only reads `.bak` when called with
    `use_backup=True`, and `has_backup()` lets the UI decide whether to offer it
-   (test: `test_damaged_vault_never_falls_back_to_backup`). The UI side gets a pytest-qt test
-   in Phase 4.
+   (test: `test_damaged_vault_never_falls_back_to_backup`). The UI side is covered by
+   `tests/ui/test_unlock_dialog.py::test_never_opens_backup_silently`.
 
 Storage stays bytes-only. The verify callback (decrypt + parse) is injected by `vault_service`.
 

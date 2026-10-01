@@ -77,7 +77,8 @@ VaultKeeper is a **local-only desktop password manager** for a gamer with 150+ a
 - **Never ask for real credentials**, not even one for testing.
 - Fake data only: `player1@example.test`, `FakePlayer#TEST`, `Fake-Passw0rd-1!`, etc.
 - Never commit `*.vault`, backups, exports, `.env`, logs or anything in `backups/`.
-- **Do not enter real accounts until backups work (end of Phase 5).**
+- Backups work (Phase 5). The user should choose a backup folder (File -> Backups...) before
+  entering real accounts; the app shows a "backups are off" banner until they do.
 
 ---
 
@@ -119,7 +120,7 @@ vaultkeeper/                       repo root
   .gitignore                       *.vault, backups/, .env, logs, build output
   docs/
     VAULT_FORMAT.md                byte layout, KDF defaults + rationale, bounds, atomic save
-    DATA_MODEL.md                  Account/Game/Rank fields, presets, duplicate rule
+    DATA_MODEL.md                  fields, game templates, search, paste assist, duplicates, schema history
   scripts/
     recover_vault.py               standalone decrypt-to-stdout (cryptography + argon2-cffi only)
   packaging/
@@ -148,7 +149,8 @@ vaultkeeper/                       repo root
       store.py                     VaultStore protocol + apply_change (save or roll back in memory)
       password_policy.py           master password rules (min 12) + strength hint
       tasks.py                     TaskRunner protocol + InlineTaskRunner
-      vault_service.py             create/unlock/lock/save/change password; backup-safe save after .bak
+      vault_service.py             create/unlock/lock/save/change password; backup-safe save after
+                                   .bak; on_saved listeners (backups)
       account_service.py           account CRUD + duplicate detection (warning only)
       game_service.py              add (starter/template) / rename / set_template (never blocked) / delete
       search.py                    AccountFilter, free-text search (never secrets), facets, rank sort key
@@ -163,7 +165,8 @@ vaultkeeper/                       repo root
       header.py                    header dataclass, pack/unpack, version checks
       envelope.py                  seal/open: header (as AAD) + nonce + ciphertext
     storage/
-      vault_file.py                atomic write, verify-before-replace, .bak retention, .damaged quarantine
+      vault_file.py                atomic write, verify-before-replace, .bak retention, .damaged
+                                   quarantine, write_bytes_atomic / copy_file_verified (backups, exports)
     security/
       clipboard.py                 ClipboardGuard: copy + auto-clear only if unchanged
       autolock.py                  InactivityTracker: timeout, Quick Add override (injected clock)
@@ -188,7 +191,7 @@ vaultkeeper/                       repo root
       game_setup_dialog.py         Game setup: list + editor (starter, ranks, regions, fields, extras)
       quick_add_dialog.py          Quick Add (AccountDialog subclass): Enter = save & next,
                                    batch values, counter, paste box, Ctrl+Enter anywhere
-      settings_dialog.py      (P)  timeouts, backup folder, keep-N, columns
+      settings_dialog.py      (P)  auto-lock/Quick Add timeouts, clipboard seconds, lock options
       generator_dialog.py          password generator (copy or "use" into the form)
       messages.py                  generic error texts (error_text) + confirm/error boxes
       widgets/
@@ -199,11 +202,10 @@ vaultkeeper/                       repo root
         ladder_editor.py           rank list editor: tiers + divisions, order, division style
         add_rank_dialog.py         quick add: rank name, has divisions? how many (1-10); Enter = next
         extra_fields_editor.py     extra fields editor: label, type, dropdown options (ids kept)
-        rank_picker.py             RankPicker (tier + division) and RegionPicker, preset-driven;
-                                   free text for custom games; legacy values shown, never dropped
-        secret_field.py            masked edit with show/hide (copy button in Phase 5)
+        rank_picker.py             RankPicker (tier + division) and RegionPicker, driven by the game
+                                   template; values not in the list shown marked, never dropped
+        secret_field.py            masked edit with show/hide (copying is done from the table)
         strength_meter.py          live master-password strength bar + suggestions
-        totp_display.py       (P)  live code + countdown
       styles/
         dark.qss              (P)  dark theme
   tests/
@@ -254,7 +256,8 @@ vaultkeeper/                       repo root
 - **No plaintext on disk**: temp files, logs, settings, crash output, exports.
 - No business logic in UI files. No giant files (flag >~300 lines).
 - **No new dependencies without asking.** Approved: PyQt5, argon2-cffi, cryptography, pyotp,
-  pytest, pytest-qt, PyInstaller, ruff.
+  pytest, pytest-qt, PyInstaller, ruff. (pyotp is pinned but unused since TOTP was skipped;
+  remove it only with the user's OK.)
 - No real passwords/personal data anywhere. No committing vault/backup/export files.
 - No `pickle`, `marshal`, `shelve`, `eval`, `exec`, `shell=True`, `yaml.load`, `random`.
 - No bare `except:`, no silent swallowing.
@@ -284,7 +287,8 @@ vaultkeeper/                       repo root
     clears UI models, closes all dialogs (unsaved drafts discarded), and clears the clipboard if
     it still holds our copy. **Honest limit:** Python can't guarantee memory zeroing. The key is
     a `bytearray` overwritten best-effort, and other copies drop when references go.
-11. Secrets (`password`, `email_password`, `totp_secret`) are masked by default, left out of
+11. Secrets (`password`, `email_password`, `totp_secret`, secret extra fields) are masked by
+    default, never searched or shown as table columns, left out of
     `repr()`, auto-cleared from the clipboard and never logged. Clipboard copies are excluded from
     Windows Clipboard History and cloud sync where Qt allows.
 12. Argon2 never runs on the UI thread.
@@ -293,8 +297,9 @@ vaultkeeper/                       repo root
 ## 7. Vault format (summary → `docs/VAULT_FORMAT.md`)
 Binary header (magic `VKVAULT\0`, format version, file kind vault/export, Argon2id params,
 salt, cipher id, nonce, ciphertext length) + AES-256-GCM ciphertext of a UTF-8 JSON payload
-with `schema_version`. Key = Argon2id over the NFC-normalized UTF-8 password. KDF defaults
-t=4, m=512 MiB, p=4 (about 0.3 s on the dev PC; target under ~1 s on a modest PC). Any format change must update
+with `schema_version` (currently 2). Key = Argon2id over the NFC-normalized UTF-8 password.
+KDF defaults t=4, m=512 MiB, p=4 (about 0.3 s on the dev PC; target under ~1 s on a modest
+PC). Backups are byte copies; exports use file kind 2. Any format change must update
 `docs/VAULT_FORMAT.md`, `scripts/recover_vault.py` and `tests/test_recover_script.py` together.
 
 ## 8. Data model (summary → `docs/DATA_MODEL.md`)
@@ -315,7 +320,8 @@ account data. Duplicate check is a warning only: same game and the same login or
   `VaultIOError`, `ValidationError` (field name, never the value), `WeakPasswordError`,
   `NotFoundError`, `DuplicateGameError`, `GameInUseError`.
 - Translate library exceptions at layer boundaries. Use `from None` when chaining could leak data.
-- The UI shows generic text via `ui/messages.py`. Unexpected errors go to a top-level hook.
+- The UI shows generic text via `ui/messages.py`. Unexpected errors go to a top-level hook
+  that logs type and location only (a user-facing error dialog is part of Phase 8).
 
 ## 10. Testing
 - pytest (+ pytest-qt for UI smoke tests). Every headless module has a matching test file.
@@ -390,12 +396,11 @@ python -m vaultkeeper  # run the app
   (about 0.3 s measured on the dev PC). Header bounds t ≤ 10, m ≤ 1 GiB leave room to raise it.
 - Per-game presets (Valorant, Marvel Rivals, Overwatch), verified against current sources,
   with the source and date in `constants.py`. Anything unverifiable is marked UNVERIFIED there
-  (currently: Marvel Rivals regions). The custom preset has free-text rank and region.
+  (currently: Marvel Rivals regions). Presets are now only STARTERS for game templates (4d).
 - Riot ID = name + optional tag. Login URL is copy-only (no "open in browser").
 - Deleting a game with accounts is blocked. Export uses a separate password (import later).
 - Backups: after a save (max one per 10 min) plus on lock/exit if changed. Keep the last 10.
 - Paste assist also reads `user:`/`pass:` style lines. It never saves automatically.
-- No extra fields for now (the schema is versioned).
 - Defaults: auto-lock 5 min, Quick Add inactivity 15 min, lock on minimize and on Windows
   session lock, clipboard clear 15 s. All configurable.
 - TOTP: SKIPPED (user decision, 2026-10-01). `Account.totp_secret` stays in the model and
@@ -411,10 +416,9 @@ python -m vaultkeeper  # run the app
 - Master password policy: ≥12 chars, ≥5 distinct chars, not on a small common-password list.
 - Every service change saves immediately and rolls back in memory if the save fails.
 - Free-text search covers notes but never secrets. Tag filters require ALL selected labels.
-- A game's preset change is blocked if any account would become invalid (message gives count).
 - Phase 4 backup UX: show "Try the backup copy" only when a `.bak` exists, worded as "only if
   you're sure the password is right". It never opens automatically.
-- Phase 5: exports must use the `.vault` extension or live under `exports/` (both gitignored).
+- Exports always use the `.vault` extension (gitignored, like `exports/`).
 - After unlocking from `.bak`, the next save renames the main file to `<vault>.damaged-<time>`
   and leaves `.bak` untouched (a damaged file never overwrites the good backup).
 - One vault is the normal case. "Create a new vault" is only offered on the first-run Welcome
@@ -426,7 +430,8 @@ python -m vaultkeeper  # run the app
   value not in the preset is shown marked "(not in this game's list)" rather than dropped.
   After saving, the edited/new row stays selected.
 - Per-game templates (4d): every game, built-ins included, has editable ranks (tiers + 0-10
-  divisions, entered as "has divisions? how many?"), regions, shown standard fields and extra fields (text/number/dropdown/secret).
+  divisions, entered as "has divisions? how many?"), regions, shown standard fields and
+  extra fields (text/number/dropdown/secret).
   Template edits are never blocked and never delete data (kept values marked "not in this
   game's list"). This replaced "block a preset change if accounts become invalid".
 - Minimum account = a game + one of username / in-game name / email. Password, email and
@@ -462,17 +467,16 @@ python -m vaultkeeper  # run the app
 ### Status
 - [x] Step 0: CLAUDE.md + plan approved
 - [x] Phase 1: Scaffold, config, models
-- [x] Phase 2: Crypto, storage, vault service, recovery script (pushed 9372fb1)
-- [x] Phase 3: Account/game services, search (committed 0bc7cc3; validation split into
+- [x] Phase 2: Crypto, storage, vault service, recovery script
+- [x] Phase 3: Account/game services, search (validation later split into
       text_validation.py + validation.py)
 - [x] Phase 4: Core UI
   - [x] 4a: foundation, welcome, create, unlock (+ backup offer/banner), task runner, shell, --demo
   - [x] 4b: full main window (sidebar, search, table, lock, change master password)
-  - [x] 4c: account dialog, game manager
+  - [x] 4c: account dialog, game manager (replaced by Game setup in 4d)
   - [x] 4d: per-game templates (custom ranks/regions/fields/extra fields), Game setup, schema v2
 - [x] Phase 5: Clipboard, auto-lock, generator, export, backups
-- [x] Phase 6: Quick Add, batch mode, paste assist
-- [x] Phase 6 committed 0838217 (NOT pushed yet; ask before pushing)
+- [x] Phase 6: Quick Add, batch mode, paste assist (pushed with the docs update)
 - [-] Phase 7: TOTP (skipped by the user)
 - [ ] Phase 8: Polish + packaging (NEXT)
 

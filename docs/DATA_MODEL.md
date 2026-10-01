@@ -20,7 +20,7 @@ Reference for `core/models.py`, `core/game_template.py`, `core/serialization.py`
 | rank             | Rank                     | see below                                              |
 | status           | str                      | `active` \| `banned` \| `locked` \| `retired`          |
 | recovery_email   | str \| None              |                                                        |
-| totp_secret      | str \| None              | **secret**, base32 (Phase 7)                           |
+| totp_secret      | str \| None              | **secret**, base32; not shown (TOTP was skipped)       |
 | tags             | tuple[str]               | labels; trimmed, de-duplicated case-insensitively      |
 | notes            | str                      | free-form                                              |
 | extra            | tuple[(field_id, value)] | values of the game's extra fields, sorted by id        |
