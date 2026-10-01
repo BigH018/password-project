@@ -10,7 +10,9 @@ import pytest
 from vaultkeeper.config import constants as c
 from vaultkeeper.config import paths
 from vaultkeeper.config.settings import (
+    MAX_GEOMETRY_LENGTH,
     Settings,
+    SettingsFile,
     load_settings,
     save_settings,
     settings_from_dict,
@@ -92,3 +94,62 @@ def test_app_data_dir_per_platform(tmp_path: Path) -> None:
 def test_settings_and_log_paths(tmp_path: Path) -> None:
     assert paths.settings_path(tmp_path) == tmp_path / "settings.json"
     assert paths.log_dir(tmp_path) == tmp_path / "logs"
+
+
+# --- window geometry (8c) --------------------------------------------------------------------
+
+GEOMETRY = "AdnQywADAAAAAAB4AAAAWgAABK8AAALp"  # opaque base64, as Qt's saveGeometry gives
+
+
+def test_window_geometry_round_trip(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    save_settings(path, Settings(window_geometry=GEOMETRY))
+    assert load_settings(path).window_geometry == GEOMETRY
+
+
+def test_old_settings_file_without_geometry_still_loads(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"settings_version": 1, "autolock_minutes": 7}))
+    loaded = load_settings(path)
+    assert loaded.autolock_minutes == 7 and loaded.window_geometry is None
+
+
+@pytest.mark.parametrize("bad", [
+    "", "not base64!", "abc" + chr(0), "<script>", 42, ["x"], "A" * (MAX_GEOMETRY_LENGTH + 1),
+])
+def test_invalid_geometry_is_ignored(bad: object) -> None:
+    assert settings_from_dict({"window_geometry": bad}).window_geometry is None
+    with pytest.raises(ValidationError):
+        update_settings(Settings(), window_geometry=bad)
+
+
+# --- SettingsFile ----------------------------------------------------------------------------
+
+
+def test_settings_file_update_saves(tmp_path: Path) -> None:
+    store = SettingsFile(tmp_path / "settings.json", Settings())
+    assert store.update(autolock_minutes=9) is True
+    assert store.current.autolock_minutes == 9
+    assert load_settings(store.path).autolock_minutes == 9
+
+
+def test_settings_file_skips_write_when_unchanged(tmp_path: Path) -> None:
+    store = SettingsFile(tmp_path / "settings.json", Settings())
+    assert store.update(autolock_minutes=Settings().autolock_minutes) is True
+    assert not store.path.exists()
+
+
+def test_settings_file_failed_save_keeps_values(tmp_path: Path) -> None:
+    blocker = tmp_path / "file-not-folder"
+    blocker.write_text("x")
+    store = SettingsFile(blocker / "settings.json", Settings())
+    assert store.update(autolock_minutes=9) is False
+    assert store.current.autolock_minutes == 9
+
+
+def test_settings_file_rejects_invalid(tmp_path: Path) -> None:
+    store = SettingsFile(tmp_path / "settings.json", Settings())
+    with pytest.raises(ValidationError):
+        store.update(autolock_minutes=0)
+    assert store.current == Settings() and not store.path.exists()
+

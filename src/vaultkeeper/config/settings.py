@@ -1,6 +1,7 @@
 """Non-secret user settings, stored as JSON in the app data directory.
 
-Settings never contain account data or secrets: only paths, timeouts and UI preferences.
+Settings never contain account data or secrets: only paths, timeouts and UI preferences
+(including the main window's size/position as an opaque base64 blob).
 Loading is forgiving. A missing, corrupt or out-of-range value falls back to its default,
 so a broken settings file can never stop the app from starting.
 """
@@ -11,6 +12,7 @@ import contextlib
 import json
 import logging
 import os
+import string
 from dataclasses import asdict, dataclass, fields, replace
 from pathlib import Path
 from typing import Any
@@ -22,6 +24,8 @@ log = logging.getLogger(__name__)
 
 SETTINGS_VERSION = 1
 MAX_PATH_LENGTH = 4096
+MAX_GEOMETRY_LENGTH = 2048
+_BASE64_CHARS = frozenset(string.ascii_letters + string.digits + "+/=")
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +41,7 @@ class Settings:
     quick_add_autolock_minutes: int = c.DEFAULT_QUICK_ADD_AUTOLOCK_MINUTES
     lock_on_minimize: bool = c.DEFAULT_LOCK_ON_MINIMIZE
     lock_on_session_lock: bool = c.DEFAULT_LOCK_ON_SESSION_LOCK
+    window_geometry: str | None = None  # Qt saveGeometry() as base64; None = default size
 
 
 _INT_RANGES: dict[str, tuple[int, int]] = {
@@ -57,7 +62,16 @@ def _valid_path(value: Any) -> bool:
     )
 
 
+def _valid_geometry(value: Any) -> bool:
+    return value is None or (
+        isinstance(value, str) and 0 < len(value) <= MAX_GEOMETRY_LENGTH
+        and set(value) <= _BASE64_CHARS
+    )
+
+
 def _valid_value(name: str, value: Any) -> bool:
+    if name == "window_geometry":
+        return _valid_geometry(value)
     if name in _PATH_FIELDS:
         return _valid_path(value)
     if name in _BOOL_FIELDS:
@@ -133,3 +147,31 @@ def save_settings(path: Path, settings: Settings) -> None:
 def update_settings(settings: Settings, **changes: Any) -> Settings:
     """Return a copy of ``settings`` with ``changes`` applied and validated."""
     return validate_settings(replace(settings, **changes))
+
+
+class SettingsFile:
+    """The current settings and the file they live in. ``update`` validates, keeps, saves."""
+
+    def __init__(self, path: Path, settings: Settings) -> None:
+        self.path = path
+        self.current = settings
+
+    def update(self, **changes: Any) -> bool:
+        """Apply ``changes`` (ValidationError if invalid) and save. False if saving failed.
+
+        The new values are kept in memory either way; nothing is written if nothing changed.
+        """
+        updated = update_settings(self.current, **changes)
+        if updated == self.current:
+            return True
+        self.current = updated
+        return self.save()
+
+    def save(self) -> bool:
+        """Write the current settings. Failures are logged (no paths) and return False."""
+        try:
+            save_settings(self.path, self.current)
+        except VaultIOError:
+            log.warning("Could not save settings")
+            return False
+        return True

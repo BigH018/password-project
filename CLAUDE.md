@@ -135,7 +135,8 @@ vaultkeeper/                       repo root
     errors.py                      custom exception hierarchy
     config/
       constants.py                 statuses, per-game rank/region presets, defaults, limits
-      settings.py                  load/save non-secret settings JSON
+      settings.py                  load/save non-secret settings JSON (incl. window geometry);
+                                   SettingsFile = current settings + update-and-save
       paths.py                     app-data dir and default file locations
       logging_setup.py             logging config + redaction filter (defense in depth)
     core/
@@ -227,7 +228,8 @@ vaultkeeper/                       repo root
     test_text_validation.py        limits, control/bidi chars, secrets untouched, email, URL
     test_validation.py             field rules, presets, ranks, whole-account validation
     test_constants.py              preset consistency (divisions, tiers, regions)
-    test_settings.py               load/save, defaults, corrupt file handling, paths
+    test_settings.py               load/save, defaults, corrupt file handling, paths, geometry,
+                                   SettingsFile
     test_logging_setup.py          redaction, exceptions logged without messages
     test_header.py, test_kdf.py, test_cipher.py, test_envelope.py, test_vault_file.py
     test_vault_service.py, test_password_policy.py, test_recover_script.py
@@ -246,7 +248,8 @@ vaultkeeper/                       repo root
                                    test_quick_add (save & next, batch, paste, keys, timeout),
                                    test_theme (stylesheet loads, offline, palette fallback),
                                    test_branding (icon, titles, no "?", window hidden while locked),
-                                   test_settings_dialog (values, defaults, save + apply live)
+                                   test_settings_dialog (values, defaults, save + apply live),
+                                   test_window_geometry (saved on lock/quit, restored at start)
 ```
 
 ---
@@ -482,6 +485,10 @@ python -m vaultkeeper  # run the app
   the current settings so Backups changes made meanwhile are kept. If saving fails the values
   still apply and the status bar says so. The Windows-lock watcher is always registered and
   the setting is checked when it fires, so toggling it needs no restart.
+- Window geometry (8c): `Settings.window_geometry` = Qt saveGeometry() as base64 (validated:
+  base64 chars, <= 2048). Saved on lock and quit only if the window is visible; restored when
+  the controller builds the window (Qt pulls it back on screen; maximized is kept). Settings
+  version stays 1: the field has a default, so old files load.
 - Spin boxes are left unstyled in dark.qss (QSS can't draw arrows without image files).
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
   logs), deleted on exit; leftovers are swept at the next demo start. Real settings untouched.
@@ -503,7 +510,7 @@ python -m vaultkeeper  # run the app
 - [ ] Phase 8: Polish + packaging (IN PROGRESS)
   - [x] 8a: dark theme (dark.qss loaded by theme.py)
   - [x] 8a+: branding (title, icon, taskbar id), main window hidden while locked
-  - [x] 8b: settings dialog  - [ ] 8c: window geometry  - [ ] 8d: error dialog  - [ ] 8e: .exe
+  - [x] 8b: settings dialog  - [x] 8c: window geometry  - [ ] 8d: error dialog  - [ ] 8e: .exe
 
 ### Next up: Phase 8 handoff (for a fresh session)
 Present a short plan list first and wait for the user's go, as with earlier phases.

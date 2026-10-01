@@ -6,7 +6,7 @@ to the controller.
 
 from __future__ import annotations
 
-from PyQt5.QtCore import QEvent, Qt, pyqtSignal
+from PyQt5.QtCore import QByteArray, QEvent, Qt, pyqtSignal
 from PyQt5.QtGui import QCloseEvent, QKeySequence
 from PyQt5.QtWidgets import QAction, QLabel, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
@@ -152,6 +152,16 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.panel)
         self.panel.bind(accounts, games)
         self._update_actions()
+
+    def geometry_text(self) -> str:
+        """Size, position and maximized state as base64 (for the settings file)."""
+        return bytes(self.saveGeometry().toBase64()).decode("ascii")
+
+    def restore_geometry_text(self, text: str | None) -> bool:
+        """Restore ``geometry_text`` output. Qt moves it back on screen if a monitor is gone."""
+        if not text:
+            return False
+        return self.restoreGeometry(QByteArray.fromBase64(text.encode("ascii")))
 
     @property
     def unlocked(self) -> bool:

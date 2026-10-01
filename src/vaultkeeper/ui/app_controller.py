@@ -14,13 +14,13 @@ from PyQt5.QtCore import QObject, QStandardPaths, Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QDialog
 
 from vaultkeeper.config.constants import VAULT_EXTENSION
-from vaultkeeper.config.settings import Settings, save_settings, update_settings
+from vaultkeeper.config.settings import Settings, SettingsFile
 from vaultkeeper.core.account_service import AccountService
 from vaultkeeper.core.backup import BackupService
 from vaultkeeper.core.game_service import GameService
 from vaultkeeper.core.serialization import dumps_payload
 from vaultkeeper.core.vault_service import VaultService
-from vaultkeeper.errors import VaultIOError, VaultKeeperError
+from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui.backup_dialog import BackupDialog
 from vaultkeeper.ui.change_password_dialog import ChangePasswordDialog
 from vaultkeeper.ui.create_vault_dialog import CreateVaultDialog
@@ -59,13 +59,13 @@ class AppController(QObject):
         self._new_vault_dir = new_vault_dir
         self.guard = guard or SessionGuard(settings)
         self.backups: BackupService | None = None
-        self._settings = settings
-        self._settings_file = settings_file
+        self.settings = SettingsFile(settings_file, settings)
         self._runner = runner
         self._factory = service_factory
         self.service: VaultService | None = None
         self._unlock_minimized = False
         self.window = MainWindow(demo=demo)
+        self.window.restore_geometry_text(settings.window_geometry)  # shown after unlock
         self.window.lock_requested.connect(self.lock)
         self.window.quit_requested.connect(self.quit)
         self.window.change_password_requested.connect(self._change_password)
@@ -88,7 +88,8 @@ class AppController(QObject):
         welcome/create/unlock dialogs show, each with its own taskbar button (no parent).
         """
         self.guard.watch_session(int(self.window.winId()))  # native handle; window stays hidden
-        path = Path(self._settings.vault_path) if self._settings.vault_path else None
+        vault_path = self.settings.current.vault_path
+        path = Path(vault_path) if vault_path else None
         if path is not None and path.is_file():
             self.service = self._factory(path)
             self._unlock()
@@ -164,7 +165,7 @@ class AppController(QObject):
     # --- backups & export -------------------------------------------------------------------
 
     def _start_backups(self, service: VaultService) -> None:
-        s = self._settings
+        s = self.settings.current
         folder = Path(s.backup_dir) if s.backup_dir else None
         self.backups = BackupService(service.path, folder, s.backup_keep,
                                      s.backup_min_interval_minutes)
@@ -193,11 +194,9 @@ class AppController(QObject):
         dialog = BackupDialog(self.backups, parent=self.window)
         if dialog.exec_():
             folder = self.backups.backup_dir
-            self._settings = update_settings(
-                self._settings, backup_dir=str(folder) if folder else None,
-                backup_keep=self.backups.keep,
-                backup_min_interval_minutes=self.backups.min_interval_minutes)
-            self._save_settings()
+            self.settings.update(backup_dir=str(folder) if folder else None,
+                                 backup_keep=self.backups.keep,
+                                 backup_min_interval_minutes=self.backups.min_interval_minutes)
         self.window.set_backups_enabled(self.backups.enabled)
 
     def _export(self) -> None:
@@ -232,13 +231,13 @@ class AppController(QObject):
     def _open_settings(self) -> None:
         """Edit timeouts / lock switches; saved and applied at once (Backups has its own)."""
         open_backups = self._backup_settings if self.backups is not None else None
-        dialog = SettingsDialog(self._settings, open_backups, parent=self.window)
+        dialog = SettingsDialog(self.settings.current, open_backups, parent=self.window)
         if not dialog.exec_():
             return
-        # Merge into the current settings: the Backups dialog may have changed them meanwhile.
-        self._settings = update_settings(self._settings, **dialog.values())
-        self.guard.apply_settings(self._settings)
-        if self._save_settings():
+        # Merged into the current settings: the Backups dialog may have changed them meanwhile.
+        saved = self.settings.update(**dialog.values())
+        self.guard.apply_settings(self.settings.current)
+        if saved:
             self.window.statusBar().showMessage("Settings saved.", 4000)
         else:
             self.window.statusBar().showMessage(
@@ -246,7 +245,7 @@ class AppController(QObject):
 
     def _quick_add_opened(self) -> None:
         """You type from another window while Quick Add is open: use the longer timeout."""
-        self.guard.tracker.push_override(self._settings.quick_add_autolock_minutes * 60)
+        self.guard.tracker.push_override(self.settings.current.quick_add_autolock_minutes * 60)
 
     def _auto_lock(self, reason: str) -> None:
         log.info("Auto-lock (%s)", reason)
@@ -262,6 +261,7 @@ class AppController(QObject):
         if self.service is not None:
             self.service.lock()
         self._unlock_minimized = self.window.isMinimized()
+        self._remember_geometry()
         self.window.show_locked()
         self.window.hide()  # nothing behind the unlock dialog while locked
         if self.service is not None:
@@ -270,6 +270,7 @@ class AppController(QObject):
 
     def quit(self) -> None:
         """Lock (wiping keys) and leave the event loop. Running work is abandoned."""
+        self._remember_geometry()
         self._runner.cancel_pending()
         self.guard.disarm()
         if self.backups is not None:
@@ -279,15 +280,9 @@ class AppController(QObject):
         QApplication.quit()
 
     def _remember_vault(self, path: Path) -> None:
-        if self._settings.vault_path == str(path):
-            return
-        self._settings = update_settings(self._settings, vault_path=str(path))
-        self._save_settings()
+        self.settings.update(vault_path=str(path))
 
-    def _save_settings(self) -> bool:
-        try:
-            save_settings(self._settings_file, self._settings)
-        except VaultIOError:
-            log.warning("Could not save settings")
-            return False
-        return True
+    def _remember_geometry(self) -> None:
+        """Keep the main window's size/position for next time (only once it has been shown)."""
+        if self.window.isVisible():
+            self.settings.update(window_geometry=self.window.geometry_text())
