@@ -39,6 +39,17 @@ def backup_path(path: Path) -> Path:
     return path.with_name(path.name + ".bak")
 
 
+def damaged_path(path: Path, stamp: str | None = None) -> Path:
+    """An unused ``<vault>.damaged-YYYYMMDD-HHMMSS[-N]`` name next to ``path``."""
+    stamp = stamp or time.strftime("%Y%m%d-%H%M%S")
+    candidate = path.with_name(f"{path.name}.damaged-{stamp}")
+    counter = 2
+    while candidate.exists():
+        candidate = path.with_name(f"{path.name}.damaged-{stamp}-{counter}")
+        counter += 1
+    return candidate
+
+
 def _backup_tmp_path(path: Path) -> Path:
     return path.with_name(path.name + ".bak.tmp")
 
@@ -101,12 +112,18 @@ def _keep_previous_version(path: Path) -> None:
     _replace(staging, backup_path(path))
 
 
-def write_vault_atomic(path: Path, data: bytes, verify: Verifier) -> None:
+def write_vault_atomic(
+    path: Path, data: bytes, verify: Verifier, *, quarantine_as: Path | None = None
+) -> None:
     """Write ``data`` to ``path`` atomically, verifying it on disk before replacing.
 
     ``verify`` gets the bytes read back from the temp file and must raise a
     VaultKeeperError if they don't decrypt and parse. On any failure, the existing vault is
     untouched and the temp file is removed.
+
+    Normally the current file becomes ``.bak``. With ``quarantine_as`` (used after opening
+    from ``.bak`` because the main file failed), the current file is renamed to that path
+    instead, and ``.bak`` is NOT touched, so a damaged file never replaces the good backup.
     """
     tmp = tmp_path(path)
     try:
@@ -117,7 +134,10 @@ def write_vault_atomic(path: Path, data: bytes, verify: Verifier) -> None:
         except VaultKeeperError as exc:
             raise VaultIOError("The written vault failed verification; nothing was changed.") \
                 from exc
-        _keep_previous_version(path)
+        if quarantine_as is None:
+            _keep_previous_version(path)
+        elif path.exists():
+            _replace(path, quarantine_as)
         _replace(tmp, path)
         _fsync_dir(path.parent)
     except OSError as exc:

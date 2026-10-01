@@ -15,6 +15,8 @@ from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.crypto.kdf import KdfParams
 from vaultkeeper.errors import VaultIOError
 
+pytest_plugins = ["ui_support"]  # Qt fixtures for tests/ui (off-screen)
+
 
 class NetworkBlockedError(RuntimeError):
     """Raised when code under test tries to use the network."""

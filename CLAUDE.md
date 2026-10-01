@@ -33,10 +33,11 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | Task type | Read first | Read only if needed |
 |---|---|---|
 | Crypto, KDF, vault format | docs/VAULT_FORMAT.md, crypto/*, storage/vault_file.py, errors.py | scripts/recover_vault.py (must stay in sync with the format); tests/test_header, test_kdf, test_cipher, test_envelope, test_vault_file, test_recover_script |
-| Vault lifecycle (create, unlock, lock, change password) | core/vault_service.py, core/password_policy.py, errors.py, core/serialization.py | crypto/ signatures, tests/test_vault_service.py, test_password_policy.py |
+| Vault lifecycle (create, unlock, lock, change password) | core/vault_service.py, core/tasks.py, core/password_policy.py, errors.py, core/serialization.py | crypto/ signatures, storage/vault_file.py signatures, tests/test_vault_service.py, test_password_policy.py |
 | Accounts, games, search, duplicates | docs/DATA_MODEL.md, core/models.py, the relevant service (account_service, game_service or search), core/store.py, core/validation.py | core/text_validation.py, matching test file, tests/conftest.py (FakeStore) |
 | Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/serialization.py, config/constants.py, tests/test_serialization.py | grep ui/ for the field to see where it is displayed |
-| A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/qt_adapters.py, and signatures of the services it calls | ui/styles/dark.qss for visual work |
+| A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/theme.py, and signatures of the services it calls | ui/app_controller.py (screen flow), ui/qt_adapters.py, tests/ui_support.py, matching tests/ui file |
+| App startup, demo mode | app.py, demo.py, ui/app_controller.py | config/settings.py, config/logging_setup.py, tests/test_demo.py |
 | Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures, core/validation.py signatures | tests/test_paste_assist.py, test_entry_session.py |
 | Clipboard, auto-lock, session lock | security/*, ui/qt_adapters.py | tests/test_clipboard.py, test_autolock.py |
 | Backups, export | core/backup.py, core/exporter.py, storage/vault_file.py | docs/VAULT_FORMAT.md |
@@ -87,7 +88,7 @@ ui ──► core ──► crypto, storage
 │        └────► config, errors          (leaf modules: stdlib only)
 └──► security ──► config, errors       (headless; Qt parts injected from ui)
 crypto, storage ──► config, errors     (every layer may use the leaves)
-app.py / main.py wire everything together.
+app.py / main.py wire everything together. demo.py may use core (+ crypto for KdfParams).
 scripts/recover_vault.py is standalone: it must NOT import vaultkeeper.
 ```
 1. Dependencies flow one way: `ui -> core -> crypto/storage`. Lower layers never import higher ones.
@@ -99,7 +100,9 @@ scripts/recover_vault.py is standalone: it must NOT import vaultkeeper.
 4. `ui` holds NO business or crypto logic. If a UI file decides a business rule, move it to `core`.
 5. Slow work (Argon2) runs through an injected `TaskRunner` (`core/vault_service.py`):
    a pure *prepare* step runs on the runner, and the *commit* step updates state on the UI
-   thread. Tests use `InlineTaskRunner`. The UI supplies a Qt worker in `ui/qt_adapters.py`.
+   thread. Tests use `InlineTaskRunner` (`core/tasks.py`). The UI supplies `QtTaskRunner`
+   (`ui/qt_adapters.py`): daemon threads so a hung KDF never blocks quitting, and
+   `cancel_pending()` discards results when the user closes a dialog mid-work.
 6. Constructor injection for collaborators (clock, executor, paths, KDF params, clipboard
    backend, scheduler). No module-level singletons holding state.
 
@@ -123,8 +126,9 @@ vaultkeeper/                       repo root
   src/vaultkeeper/
     __init__.py                    version string only
     __main__.py                    `python -m vaultkeeper` -> main.main()
-    main.py                        entry point only (prints a notice until Phase 4)
-    app.py                    (P)  bootstrap: logging, settings, services, QApplication, lifecycle
+    main.py                        entry point only -> app.run()
+    app.py                         bootstrap: args (--demo), logging, settings, QApplication, cleanup
+    demo.py                        throwaway temp-folder demo vault with fake accounts (--demo)
     errors.py                      custom exception hierarchy
     config/
       constants.py                 statuses, per-game rank/region presets, defaults, limits
@@ -138,7 +142,8 @@ vaultkeeper/                       repo root
       validation.py                field rules (names, tags, labels, presets, ranks, TOTP) + validate_account
       store.py                     VaultStore protocol + apply_change (save or roll back in memory)
       password_policy.py           master password rules (min 12) + strength hint
-      vault_service.py             create/unlock/lock/save/change password, TaskRunner (~285 lines)
+      tasks.py                     TaskRunner protocol + InlineTaskRunner
+      vault_service.py             create/unlock/lock/save/change password; backup-safe save after .bak
       account_service.py           account CRUD + duplicate detection (warning only)
       game_service.py              add/rename/set preset/delete games (blocked if accounts exist)
       search.py                    AccountFilter, free-text search (never secrets), rank sort key
@@ -154,33 +159,38 @@ vaultkeeper/                       repo root
       header.py                    header dataclass, pack/unpack, version checks
       envelope.py                  seal/open: header (as AAD) + nonce + ciphertext
     storage/
-      vault_file.py                atomic write with verify-before-replace, .bak retention
+      vault_file.py                atomic write, verify-before-replace, .bak retention, .damaged quarantine
     security/
       clipboard.py            (P)  ClipboardGuard: copy + auto-clear if unchanged
       autolock.py             (P)  inactivity logic, Quick Add timeout override (injected clock)
     ui/
-      qt_adapters.py          (P)  QClipboard, QTimer, worker thread, activity + session-lock filters
-      main_window.py          (P)  window shell: menus, sidebar, table, search; wiring only
-      unlock_dialog.py        (P)  master password prompt (KDF runs off the UI thread)
-      create_vault_dialog.py  (P)  location + master password + confirm + strength hint
+      qt_adapters.py               QtTaskRunner (daemon threads, cancel_pending); later clipboard/timers
+      app_controller.py            screen flow: welcome -> create/unlock -> main; lock; quit
+      theme.py                     Fusion + dark palette, shared label styles (QSS in Phase 8)
+      welcome_dialog.py            create new vault / open existing file
+      main_window.py               window: menus, backup banner, status bar (4a shell; table in 4b)
+      unlock_dialog.py             master password, busy state, explicit "Try the backup copy"
+      create_vault_dialog.py       location + master password + confirm + strength hint
       change_password_dialog.py (P) change master password
       account_dialog.py       (P)  full add/edit form
       game_manager_dialog.py  (P)  add/rename/delete games
       quick_add_dialog.py     (P)  keyboard-first batch entry + paste box + duplicate warning
       settings_dialog.py      (P)  timeouts, backup folder, keep-N, columns
       generator_dialog.py     (P)  password generator UI
-      messages.py             (P)  shared confirm/error dialogs (generic wording)
+      messages.py                  generic error texts (error_text) + confirm/error boxes
       widgets/
         account_table.py      (P)  table model + sort/filter proxy, masked secrets
         game_sidebar.py       (P)  game list with counts
         search_bar.py         (P)  free text + filter dropdowns
         rank_picker.py        (P)  tier + division combos driven by the game preset
-        secret_field.py       (P)  masked edit with show/hide + copy
+        secret_field.py            masked edit with show/hide (copy button in Phase 5)
+        strength_meter.py          live master-password strength bar + suggestions
         totp_display.py       (P)  live code + countdown
       styles/
         dark.qss              (P)  dark theme
   tests/
     conftest.py                    fast KDF params, network block (autouse), FakeStore, fixtures
+    ui_support.py                  pytest plugin: off-screen Qt, QtTaskRunner, Gate (blocking KDF)
     fake_data.py                   obviously fake games/accounts
     test_architecture.py           AST scan: no PyQt5 in headless layers, no forbidden calls/imports
     test_no_network.py             flows run with sockets blocked
@@ -194,9 +204,12 @@ vaultkeeper/                       repo root
     test_header.py, test_kdf.py, test_cipher.py, test_envelope.py, test_vault_file.py
     test_vault_service.py, test_password_policy.py, test_recover_script.py
     test_accounts.py, test_games.py, test_search.py
+    test_demo.py                   demo stays in temp, fake data only, cleaned up (even with open logs)
     test_backup.py, test_exporter.py, test_clipboard.py, test_autolock.py              (P)
     test_generator.py, test_entry_session.py, test_paste_assist.py, test_totp.py      (P)
-    ui/                       (P)  pytest-qt smoke tests
+    ui/                            pytest-qt: test_qt_adapters, test_unlock_dialog (never-silent
+                                   backup, no freeze, closable while busy), test_create_vault_dialog,
+                                   test_shell (welcome + main window)
 ```
 
 ---
@@ -376,6 +389,10 @@ python -m vaultkeeper  # run the app
 - Phase 4 backup UX: show "Try the backup copy" only when a `.bak` exists, worded as "only if
   you're sure the password is right". It never opens automatically.
 - Phase 5: exports must use the `.vault` extension or live under `exports/` (both gitignored).
+- After unlocking from `.bak`, the next save renames the main file to `<vault>.damaged-<time>`
+  and leaves `.bak` untouched (a damaged file never overwrites the good backup).
+- `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
+  logs), deleted on exit; leftovers are swept at the next demo start. Real settings untouched.
 
 ### Status
 - [x] Step 0: CLAUDE.md + plan approved
@@ -384,6 +401,9 @@ python -m vaultkeeper  # run the app
 - [x] Phase 3: Account/game services, search (committed 0bc7cc3; validation split into
       text_validation.py + validation.py)
 - [ ] Phase 4: Core UI
+  - [x] 4a: foundation, welcome, create, unlock (+ backup offer/banner), task runner, shell, --demo
+  - [ ] 4b: full main window (sidebar, search, table, lock, change master password)
+  - [ ] 4c: account dialog, game manager
 - [ ] Phase 5: Clipboard, auto-lock, generator, export, backups
 - [ ] Phase 6: Quick Add, batch mode, paste assist
 - [ ] Phase 7: TOTP

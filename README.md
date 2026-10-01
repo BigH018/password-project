@@ -3,7 +3,7 @@
 A local-only, offline desktop password manager built around game accounts (Valorant, Marvel
 Rivals, Overwatch and more). Everything is stored in one encrypted vault file on your PC.
 
-> **Status:** in development (Phase 2 of 8). The app is not usable yet.
+> **Status:** in development (Phase 4 of 8). The app is not usable yet.
 > **Do not enter real accounts until backups work (end of Phase 5).**
 
 ## Install and run (Windows)
@@ -14,8 +14,13 @@ py -3.11 -m venv .venv
 pip install -r requirements.txt -r requirements-dev.txt
 pip install -e .
 pytest                 # run the tests
-python -m vaultkeeper  # run the app (UI arrives in Phase 4)
+python -m vaultkeeper         # run the app
+python -m vaultkeeper --demo  # try it with fake accounts in a throwaway temp folder
 ```
+
+`--demo` creates a temporary vault full of obviously fake accounts in your system temp folder
+(with its own settings and logs), prints the demo master password in the terminal, and
+deletes the folder when you quit. Your real settings and vault are never touched.
 
 ## Security notes
 

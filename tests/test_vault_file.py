@@ -146,6 +146,35 @@ def test_replace_retries_on_permission_error(
     assert attempts["n"] == 3
 
 
+def test_quarantine_moves_current_aside_and_leaves_bak(existing: Path) -> None:
+    vf.write_vault_atomic(existing, b"second", ok)  # .bak = OLD, vault = second
+    target = vf.damaged_path(existing, "20260101-000000")
+    vf.write_vault_atomic(existing, NEW, ok, quarantine_as=target)
+    assert existing.read_bytes() == NEW
+    assert vf.backup_path(existing).read_bytes() == OLD  # untouched
+    assert target.read_bytes() == b"second"
+    assert _leftovers(existing) == []
+
+
+def test_quarantine_verify_failure_changes_nothing(existing: Path) -> None:
+    target = vf.damaged_path(existing, "20260101-000000")
+
+    def bad(_data: bytes) -> None:
+        raise VaultAuthError()
+
+    with pytest.raises(VaultIOError):
+        vf.write_vault_atomic(existing, NEW, bad, quarantine_as=target)
+    assert existing.read_bytes() == OLD and not target.exists()
+
+
+def test_damaged_path_never_collides(existing: Path) -> None:
+    first = vf.damaged_path(existing, "20260101-000000")
+    first.write_bytes(b"x")
+    second = vf.damaged_path(existing, "20260101-000000")
+    assert second != first and second.name.endswith("-2")
+    assert first.name == "v.vault.damaged-20260101-000000"
+
+
 def test_cleanup_never_touches_vault_or_bak(existing: Path) -> None:
     vf.write_vault_atomic(existing, NEW, ok)
     vf.tmp_path(existing).write_bytes(b"stale")

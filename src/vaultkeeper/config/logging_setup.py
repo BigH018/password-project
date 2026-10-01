@@ -107,6 +107,14 @@ def configure_logging(log_directory: Path | None, level: int = logging.INFO) -> 
     return root
 
 
+def close_logging() -> None:
+    """Detach and close all root handlers (releases log files so folders can be deleted)."""
+    root = logging.getLogger()
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+        handler.close()
+
+
 def install_exception_hooks(logger: logging.Logger) -> None:
     """Route uncaught exceptions (main and worker threads) to sanitized log entries."""
 

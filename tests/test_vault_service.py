@@ -10,7 +10,8 @@ import pytest
 
 from conftest import FAST_KDF, MASTER, OTHER_MASTER
 from fake_data import make_account, make_game
-from vaultkeeper.core.vault_service import InlineTaskRunner, VaultService
+from vaultkeeper.core.tasks import InlineTaskRunner
+from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.crypto.kdf import KdfParams
 from vaultkeeper.errors import (
     VaultAuthError,
@@ -148,6 +149,51 @@ def test_damaged_vault_never_falls_back_to_backup(make_service: Factory,
     assert again.is_unlocked
 
 
+def test_save_after_opening_backup_keeps_good_bak_and_damaged_copy(
+    make_service: Factory, vault_path: Path
+) -> None:
+    """Regression: saving after opening .bak must NOT copy the damaged main file over .bak."""
+    svc = make_service()
+    svc.create(MASTER)
+    _populate(svc)  # .bak = good older version
+    svc.lock()
+    damaged = bytearray(vault_path.read_bytes())
+    damaged[-1] ^= 0x01
+    vault_path.write_bytes(bytes(damaged))
+    good_bak = svc.backup_path.read_bytes()
+
+    restored = make_service()
+    restored.unlock(MASTER, use_backup=True)
+    assert restored.opened_from_backup
+    restored.save()
+
+    assert restored.backup_path.read_bytes() == good_bak  # good backup untouched
+    kept = restored.last_damaged_copy
+    assert kept is not None and kept.name.startswith("test.vault.damaged-")
+    assert kept.read_bytes() == bytes(damaged)  # damaged file preserved, not deleted
+    assert not restored.opened_from_backup
+    restored.lock()
+    make_service().unlock(MASTER)  # main vault is healthy again
+
+    # Later saves go back to the normal rotation (main -> .bak).
+    again = make_service()
+    again.unlock(MASTER)
+    again.save()
+    assert again.backup_path.read_bytes() != good_bak
+    assert again.last_damaged_copy is None
+
+
+def test_opened_from_backup_resets_on_lock(make_service: Factory) -> None:
+    svc = make_service()
+    svc.create(MASTER)
+    svc.save()
+    svc.lock()
+    svc.unlock(MASTER, use_backup=True)
+    assert svc.opened_from_backup
+    svc.lock()
+    assert not svc.opened_from_backup
+
+
 def test_has_backup_false_for_new_vault(make_service: Factory) -> None:
     svc = make_service()
     svc.create(MASTER)
@@ -227,7 +273,7 @@ def test_failed_save_during_change_keeps_old_password(
     svc = make_service()
     svc.create(MASTER)
 
-    def fail(*_a: object) -> None:
+    def fail(*_a: object, **_kw: object) -> None:
         raise VaultIOError("simulated")
 
     monkeypatch.setattr(vault_file, "write_vault_atomic", fail)

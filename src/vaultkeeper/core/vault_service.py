@@ -15,11 +15,11 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, TypeVar
 
 from vaultkeeper.core.models import VaultData, utc_now_iso
 from vaultkeeper.core.password_policy import check_master_password
 from vaultkeeper.core.serialization import dumps_payload, loads_payload
+from vaultkeeper.core.tasks import InlineTaskRunner, TaskRunner
 from vaultkeeper.crypto import envelope
 from vaultkeeper.crypto.header import FileKind
 from vaultkeeper.crypto.kdf import (
@@ -35,40 +35,8 @@ from vaultkeeper.storage import vault_file
 
 log = logging.getLogger(__name__)
 
-T = TypeVar("T")
 KeyDeriver = Callable[[str, bytes, KdfParams], bytearray]
 WRONG_PASSWORD_DELAY_SECONDS = 1.0
-
-
-class TaskRunner(Protocol):
-    """Runs ``task`` (possibly on another thread) and delivers the result via callbacks.
-
-    Callbacks must be invoked on the thread that owns the service (the UI thread).
-    """
-
-    def submit(
-        self,
-        task: Callable[[], T],
-        on_success: Callable[[T], None],
-        on_error: Callable[[BaseException], None],
-    ) -> None: ...
-
-
-class InlineTaskRunner:
-    """Runs tasks immediately on the calling thread (tests, scripts)."""
-
-    def submit(
-        self,
-        task: Callable[[], T],
-        on_success: Callable[[T], None],
-        on_error: Callable[[BaseException], None],
-    ) -> None:
-        try:
-            result = task()
-        except Exception as exc:  # every failure is delivered to the caller
-            on_error(exc)
-            return
-        on_success(result)
 
 
 @dataclass(slots=True)
@@ -79,6 +47,7 @@ class _Session:
     salt: bytes
     kdf: KdfParams
     data: VaultData
+    from_backup: bool = False
 
 
 class VaultService:
@@ -100,6 +69,8 @@ class VaultService:
         self._delay = wrong_password_delay
         self._sleep = sleep
         self._session: _Session | None = None
+        self._opened_from_backup = False
+        self.last_damaged_copy: Path | None = None
 
     # --- state ------------------------------------------------------------------------------
 
@@ -122,6 +93,11 @@ class VaultService:
     def data(self) -> VaultData:
         """The decrypted vault data. Raises VaultLockedError when locked."""
         return self._require_session().data
+
+    @property
+    def opened_from_backup(self) -> bool:
+        """True after unlocking from ``.bak`` until the next successful save."""
+        return self._opened_from_backup
 
     @property
     def kdf_needs_upgrade(self) -> bool:
@@ -166,7 +142,7 @@ class VaultService:
         except BaseException:
             wipe(key)
             raise
-        return _Session(key, hdr.salt, hdr.kdf, data)
+        return _Session(key, hdr.salt, hdr.kdf, data, from_backup=use_backup)
 
     def _prepare_change(self, current: str, new: str) -> _Session:
         session = self._require_session()
@@ -192,6 +168,7 @@ class VaultService:
 
     def _commit_unlock(self, session: _Session) -> None:
         self._replace_session(session)
+        self._opened_from_backup = session.from_backup
         vault_file.cleanup_stale_temp_files(self._path)
         log.info("Vault unlocked")
 
@@ -238,6 +215,7 @@ class VaultService:
     def lock(self) -> None:
         """Wipe the key (best effort) and drop all decrypted data."""
         session, self._session = self._session, None
+        self._opened_from_backup = False
         if session is not None:
             wipe(session.key)
             session.data = VaultData()
@@ -278,8 +256,19 @@ class VaultService:
     # --- writing ----------------------------------------------------------------------------
 
     def _write(self, session: _Session) -> None:
+        """Seal and write. After opening from ``.bak``, the (damaged) main file is renamed
+        aside instead of being copied over the good ``.bak``."""
         blob = envelope.seal(dumps_payload(session.data), session.key, session.kdf, session.salt)
-        vault_file.write_vault_atomic(self._path, blob, self._verifier(session.key))
+        quarantine = None
+        if self._opened_from_backup and self._path.exists():
+            quarantine = vault_file.damaged_path(self._path)
+        vault_file.write_vault_atomic(
+            self._path, blob, self._verifier(session.key), quarantine_as=quarantine
+        )
+        if quarantine is not None:
+            self.last_damaged_copy = quarantine
+            log.warning("Damaged vault file kept aside; backup left untouched")
+        self._opened_from_backup = False
 
     @staticmethod
     def _verifier(key: bytearray) -> Callable[[bytes], None]:

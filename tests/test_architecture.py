@@ -22,6 +22,7 @@ ALLOWED_INTERNAL: dict[str, set[str] | None] = {
     "security": {"security", "config", "errors"},
     "core": {"core", "crypto", "storage", "config", "errors"},
     "ui": {"ui", "core", "security", "config", "errors"},
+    "demo": {"core", "crypto", "config", "errors"},
     "app": None,
     "main": None,
     "__main__": None,

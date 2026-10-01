@@ -1,15 +1,13 @@
-"""Entry point only. All bootstrapping lives in ``vaultkeeper.app`` (Phase 4)."""
+"""Entry point only. All bootstrapping lives in ``vaultkeeper.app``."""
 
 from __future__ import annotations
-
-import sys
 
 
 def main() -> int:
     """Start the application and return the process exit code."""
-    # The UI and app bootstrap arrive in Phase 4.
-    print("VaultKeeper: the user interface is not built yet (Phase 4).", file=sys.stderr)
-    return 0
+    from vaultkeeper.app import run  # deferred so importing main stays cheap
+
+    return run()
 
 
 if __name__ == "__main__":
