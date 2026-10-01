@@ -125,6 +125,7 @@ vaultkeeper/                       repo root
     recover_vault.py               standalone decrypt-to-stdout (cryptography + argon2-cffi only)
   packaging/
     vaultkeeper.spec          (P)  PyInstaller spec (phase 8)
+    icon_source_32px.ico           the user's original 32px icon (app_icon.ico is built from it)
   src/vaultkeeper/
     __init__.py                    version string only
     __main__.py                    `python -m vaultkeeper` -> main.main()
@@ -178,7 +179,10 @@ vaultkeeper/                       repo root
       backup_dialog.py             backup folder / keep N / interval + Backup now
       export_dialog.py             encrypted export (own password; cancel writes nothing)
       app_controller.py            screen flow: welcome -> create/unlock -> main; lock (closes dialogs); quit
-      theme.py                     Fusion + dark palette, shared label styles (QSS in Phase 8)
+      branding.py                  app icon (all .ico sizes) on every window, Windows taskbar
+                                   AppUserModelID, no "?" help button on dialogs
+      theme.py                     Fusion + dark palette + styles/dark.qss (fallback: palette
+                                   only), shared label styles
       welcome_dialog.py            create new vault / open existing file
       main_window.py               menus, toolbar, backup banner, status bar, delete; hosts AccountsPanel
       accounts_view.py             AccountsPanel: game sidebar | search bar over sortable table
@@ -207,7 +211,9 @@ vaultkeeper/                       repo root
         secret_field.py            masked edit with show/hide (copying is done from the table)
         strength_meter.py          live master-password strength bar + suggestions
       styles/
-        dark.qss              (P)  dark theme
+        dark.qss                   dark theme (ASCII, no url()/images; package data)
+      assets/
+        app_icon.ico               16-256px icon (pixel-art upscale of the source; package data)
   tests/
     conftest.py                    fast KDF params, network block (autouse), FakeStore, fixtures
     ui_support.py                  pytest plugin: off-screen Qt, QtTaskRunner, Gate (blocking KDF)
@@ -235,7 +241,9 @@ vaultkeeper/                       repo root
                                    test_account_dialog, test_game_setup, test_pickers,
                                    test_shell (welcome, controller lock/demo details),
                                    test_phase5_ui (copy, auto-lock, generator, backups, export),
-                                   test_quick_add (save & next, batch, paste, keys, timeout)
+                                   test_quick_add (save & next, batch, paste, keys, timeout),
+                                   test_theme (stylesheet loads, offline, palette fallback),
+                                   test_branding (icon, titles, no "?", window hidden while locked)
 ```
 
 ---
@@ -461,6 +469,12 @@ python -m vaultkeeper  # run the app
   extra-field labels); login/password values are never scanned by other rules; unlabeled
   text: @ -> email, name#tag, rank words (+ short forms like plat/imm/t500) and regions of
   the selected game, "banned" -> status + note. It fills EMPTY fields only and never saves.
+- Branding (user, 2026-10-01): windows show "Account Manager - By BigH" (`WINDOW_TITLE`)
+  and the user's icon, and dialogs have no "?" help button. `APP_NAME`/`APP_DIR_NAME` stay "VaultKeeper" internally (settings
+  folder, logs, default paths) so existing data is found.
+- The main window is hidden whenever the vault is locked: welcome/create/unlock dialogs are
+  parentless (own taskbar button), `setQuitOnLastWindowClosed(False)` so the controller
+  decides when to quit. Locked by minimizing -> the unlock prompt starts minimized.
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
   logs), deleted on exit; leftovers are swept at the next demo start. Real settings untouched.
 
@@ -478,7 +492,10 @@ python -m vaultkeeper  # run the app
 - [x] Phase 5: Clipboard, auto-lock, generator, export, backups
 - [x] Phase 6: Quick Add, batch mode, paste assist (pushed with the docs update)
 - [-] Phase 7: TOTP (skipped by the user)
-- [ ] Phase 8: Polish + packaging (NEXT)
+- [ ] Phase 8: Polish + packaging (IN PROGRESS)
+  - [x] 8a: dark theme (dark.qss loaded by theme.py)
+  - [x] 8a+: branding (title, icon, taskbar id), main window hidden while locked
+  - [ ] 8b: settings dialog  - [ ] 8c: window geometry  - [ ] 8d: error dialog  - [ ] 8e: .exe
 
 ### Next up: Phase 8 handoff (for a fresh session)
 Present a short plan list first and wait for the user's go, as with earlier phases.
@@ -496,6 +513,10 @@ Scope agreed so far:
 5. Windows .exe with PyInstaller: `packaging/vaultkeeper.spec`, windowed (no console;
    `app.py` already guards prints when stdout is None), bundle dark.qss. Antivirus false
    positives are a known PyInstaller issue: mention, don't work around.
+Decided 2026-10-01: PyInstaller one-folder build (faster start, fewer AV false positives);
+the error dialog lets the user keep working (every change is already saved); no column
+hiding. The user will supply an app icon (`icon.ico`/`icon.png` in the repo root, to be
+moved into `packaging/`; used for the exe and the window).
 Open items to mention to the user: confirm by hand that copied passwords don't appear in
 Win+V clipboard history (automated tests can't see the real Windows panel); optional
 column hiding was deferred to Phase 8 settings.

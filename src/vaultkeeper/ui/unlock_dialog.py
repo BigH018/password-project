@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from vaultkeeper.config.constants import WINDOW_TITLE
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import VaultAuthError, VaultFormatError
 from vaultkeeper.ui.messages import error_text
@@ -54,7 +55,7 @@ class UnlockDialog(QDialog):
         self._choose_file = choose_file
         self._busy = False
         self.other_vault_path: Path | None = None
-        self.setWindowTitle("Unlock VaultKeeper")
+        self.setWindowTitle(WINDOW_TITLE)
         self.setMinimumWidth(440)
 
         self.path_label = QLabel(f"Vault: {service.path}", self)

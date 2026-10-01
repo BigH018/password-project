@@ -10,7 +10,7 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from PyQt5.QtCore import QObject, QStandardPaths, QTimer
+from PyQt5.QtCore import QObject, QStandardPaths, Qt, QTimer
 from PyQt5.QtWidgets import QApplication, QDialog
 
 from vaultkeeper.config.constants import VAULT_EXTENSION
@@ -63,6 +63,7 @@ class AppController(QObject):
         self._runner = runner
         self._factory = service_factory
         self.service: VaultService | None = None
+        self._unlock_minimized = False
         self.window = MainWindow(demo=demo)
         self.window.lock_requested.connect(self.lock)
         self.window.quit_requested.connect(self.quit)
@@ -79,9 +80,12 @@ class AppController(QObject):
     # --- flow -------------------------------------------------------------------------------
 
     def start(self) -> None:
-        """Entry point once the Qt event loop is running."""
-        self.window.show()
-        self.guard.watch_session(int(self.window.winId()))
+        """Entry point once the Qt event loop is running.
+
+        The main window stays hidden until a vault is open: before that only the small
+        welcome/create/unlock dialogs show, each with its own taskbar button (no parent).
+        """
+        self.guard.watch_session(int(self.window.winId()))  # native handle; window stays hidden
         path = Path(self._settings.vault_path) if self._settings.vault_path else None
         if path is not None and path.is_file():
             self.service = self._factory(path)
@@ -90,7 +94,7 @@ class AppController(QObject):
             self._welcome()
 
     def _welcome(self) -> None:
-        dialog = WelcomeDialog(parent=self.window)
+        dialog = WelcomeDialog(parent=None)
         if not dialog.exec_() or dialog.choice is None:
             self.quit()
             return
@@ -107,7 +111,7 @@ class AppController(QObject):
             else default_vault_path()
         )
         dialog = CreateVaultDialog(
-            self._factory, self._runner.cancel_pending, suggested, parent=self.window
+            self._factory, self._runner.cancel_pending, suggested, parent=None
         )
         if dialog.exec_() and dialog.service is not None:
             self.service = dialog.service
@@ -120,7 +124,10 @@ class AppController(QObject):
         if self.service is None:
             self._welcome()
             return
-        dialog = UnlockDialog(self.service, self._runner.cancel_pending, parent=self.window)
+        dialog = UnlockDialog(self.service, self._runner.cancel_pending, parent=None)
+        if self._unlock_minimized:  # locked by minimizing: wait on the taskbar, don't pop up
+            self._unlock_minimized = False
+            dialog.setWindowState(Qt.WindowMinimized)
         if dialog.exec_():
             self._remember_vault(self.service.path)
             self._show_unlocked()
@@ -139,8 +146,18 @@ class AppController(QObject):
             AccountService(self.service),
             GameService(self.service),
         )
+        self._present_window()
         self._start_backups(self.service)
         self.guard.arm()
+
+    def _present_window(self) -> None:
+        """Show the main window (restored if it was minimized) and bring it to the front."""
+        if self.window.isMinimized():
+            self.window.showNormal()
+        else:
+            self.window.show()
+        self.window.raise_()
+        self.window.activateWindow()
 
     # --- backups & export -------------------------------------------------------------------
 
@@ -227,7 +244,9 @@ class AppController(QObject):
             self._run_backup(self.backups.on_lock_or_exit)
         if self.service is not None:
             self.service.lock()
+        self._unlock_minimized = self.window.isMinimized()
         self.window.show_locked()
+        self.window.hide()  # nothing behind the unlock dialog while locked
         if self.service is not None:
             # Deferred so any dialog event loops we just closed can unwind first.
             QTimer.singleShot(0, self._unlock)

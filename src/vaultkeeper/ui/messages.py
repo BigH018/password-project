@@ -17,7 +17,7 @@ from vaultkeeper.errors import (
 )
 
 AUTH_FAILED = "Wrong password or the vault file is damaged."
-DAMAGED_FILE = "The vault file is damaged or isn't a VaultKeeper vault."
+DAMAGED_FILE = "The vault file is damaged or isn't an Account Manager vault."
 UNEXPECTED = "Something went wrong. The details (without any of your data) were logged."
 
 

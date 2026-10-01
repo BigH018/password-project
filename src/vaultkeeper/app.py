@@ -22,6 +22,7 @@ from vaultkeeper.config.paths import app_data_dir, log_dir, settings_path
 from vaultkeeper.config.settings import load_settings, update_settings
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.ui.app_controller import AppController
+from vaultkeeper.ui.branding import apply_branding, disable_help_buttons
 from vaultkeeper.ui.qt_adapters import QtTaskRunner
 from vaultkeeper.ui.theme import apply_dark_theme
 
@@ -62,8 +63,13 @@ def run(argv: list[str] | None = None) -> int:
         settings = update_settings(settings, vault_path=str(demo_env.vault_path),
                                    backup_dir=str(demo_env.root / "backups"))
 
+    disable_help_buttons()
     app = QApplication(sys.argv[:1])
     app.setApplicationName(APP_NAME)
+    # The main window stays hidden while locked, so closing the unlock dialog must not end the
+    # app by itself: the controller decides when to quit.
+    app.setQuitOnLastWindowClosed(False)
+    apply_branding(app)
     apply_dark_theme(app)
     runner = QtTaskRunner()
     controller = AppController(

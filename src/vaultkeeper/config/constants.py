@@ -8,7 +8,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-APP_NAME = "VaultKeeper"
+APP_NAME = "VaultKeeper"  # internal name (package, logs); the user sees DISPLAY_NAME
+DISPLAY_NAME = "Account Manager"
+WINDOW_TITLE = f"{DISPLAY_NAME} - By BigH"
+APP_USER_MODEL_ID = "BigH.AccountManager"  # Windows taskbar grouping + icon
 APP_DIR_NAME = "VaultKeeper"
 VAULT_EXTENSION = ".vault"
 

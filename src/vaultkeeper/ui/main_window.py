@@ -10,7 +10,7 @@ from PyQt5.QtCore import QEvent, Qt, pyqtSignal
 from PyQt5.QtGui import QCloseEvent, QKeySequence
 from PyQt5.QtWidgets import QAction, QLabel, QMainWindow, QStackedWidget, QVBoxLayout, QWidget
 
-from vaultkeeper.config.constants import APP_NAME
+from vaultkeeper.config.constants import WINDOW_TITLE
 from vaultkeeper.core.account_service import AccountService
 from vaultkeeper.core.entry_session import EntrySession
 from vaultkeeper.core.game_service import GameService
@@ -48,7 +48,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, demo: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle(f"{APP_NAME} - DEMO (fake data)" if demo else APP_NAME)
+        self.setWindowTitle(f"{WINDOW_TITLE} - DEMO (fake data)" if demo else WINDOW_TITLE)
         self.resize(1200, 720)
         self._accounts: AccountService | None = None
         self._games: GameService | None = None
