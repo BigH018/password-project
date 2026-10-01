@@ -238,3 +238,19 @@ def test_dialogs_run_through_run_modal(path: Path) -> None:
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
             assert node.func.attr not in ("exec_", "exec"), (
                 f"line {node.lineno}: use messages.run_modal(dialog) (deletes it afterwards)")
+
+
+# --- only the throwaway demo vault may skip the master-password policy -------------------
+POLICY_SKIP_ALLOWED = {SRC / "demo.py"}
+
+
+@pytest.mark.parametrize("path", [p for p in SRC_FILES if p not in POLICY_SKIP_ALLOWED],
+                         ids=_id)
+def test_only_demo_skips_the_password_policy(path: Path) -> None:
+    for node in ast.walk(_parse(path)):
+        if isinstance(node, ast.Call):
+            for kw in node.keywords:
+                is_off = not (isinstance(kw.value, ast.Constant) and kw.value.value is True)
+                assert not (kw.arg == "check_policy" and is_off), (
+                    f"line {node.lineno}: only demo.py may create a vault without the policy")
+

@@ -128,8 +128,9 @@ class VaultService:
 
     # --- prepare steps (pure: safe on a worker thread) --------------------------------------
 
-    def _prepare_create(self, password: str) -> _Session:
-        check_master_password(password)
+    def _prepare_create(self, password: str, check_policy: bool = True) -> _Session:
+        if check_policy:
+            check_master_password(password)
         if self.exists():
             raise VaultIOError("A vault file already exists at this location.")
         salt = new_salt()
@@ -208,9 +209,13 @@ class VaultService:
 
     # --- public synchronous API -------------------------------------------------------------
 
-    def create(self, password: str) -> None:
-        """Create a new empty vault protected by ``password`` and leave it unlocked."""
-        self._commit_new(self._prepare_create(password))
+    def create(self, password: str, *, check_policy: bool = True) -> None:
+        """Create a new empty vault protected by ``password`` and leave it unlocked.
+
+        ``check_policy=False`` is only for the throwaway demo vault (enforced by
+        tests/test_architecture.py); every real vault goes through the password policy.
+        """
+        self._commit_new(self._prepare_create(password, check_policy))
 
     def unlock(self, password: str, *, use_backup: bool = False) -> None:
         """Decrypt the vault (or its ``.bak``). Wrong password -> VaultAuthError after a delay.

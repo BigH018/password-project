@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 
 DEMO_PREFIX = "vaultkeeper-demo-"
 # Intentionally public: printed in the terminal, protects fake demo data only.
-DEMO_PASSWORD = "demo fake passphrase only"  # noqa: S105
+DEMO_PASSWORD = "test"  # noqa: S105 - throwaway demo vault only (skips the policy)
 
 _GAMES = (
     ("Valorant", "valorant", ("EU", "NA", "AP", "KR"),
@@ -121,7 +121,7 @@ def create_demo_env(
     root = Path(tempfile.mkdtemp(prefix=DEMO_PREFIX, dir=base))
     env = DemoEnv(root=root, data_dir=root / "appdata", vault_path=root / "demo.vault")
     service = VaultService(env.vault_path, kdf_params=kdf_params)
-    service.create(DEMO_PASSWORD)
+    service.create(DEMO_PASSWORD, check_policy=False)  # fake data in a temp folder
     try:
         _seed(service)
     finally:

@@ -88,3 +88,22 @@ def test_cleanup_works_after_logging_to_demo_folder(env: demo.DemoEnv) -> None:
         close_logging()
         for handler in saved:
             root_logger.addHandler(handler)
+
+
+# --- the demo master password is simply "test" (user request, 2026-10-01) ---------------
+
+
+def test_demo_password_is_test(env: demo.DemoEnv) -> None:
+    assert demo.DEMO_PASSWORD == "test"
+    svc = VaultService(env.vault_path, kdf_params=FAST_KDF)
+    svc.unlock("test")
+    assert svc.data.accounts  # the fake accounts are there
+
+
+def test_real_vaults_still_need_a_strong_password(tmp_path: Path) -> None:
+    from vaultkeeper.errors import WeakPasswordError
+
+    with pytest.raises(WeakPasswordError):
+        VaultService(tmp_path / "real.vault", kdf_params=FAST_KDF).create("test")
+    assert not (tmp_path / "real.vault").exists()
+

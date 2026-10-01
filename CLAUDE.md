@@ -588,6 +588,9 @@ python -m vaultkeeper  # run the app
 - User data is never rendered as HTML (SEC-H1): labels and message boxes come from
   `ui/safe_text.py` (Qt.PlainText), form-row labels with user text use `plain_label`, and
   tooltips are fixed text. `test_architecture.py` enforces it.
+- Demo master password is `test` (user, 2026-10-01). The throwaway demo vault is the only one
+  created without the password policy (`VaultService.create(..., check_policy=False)`, only
+  allowed in demo.py: architecture test). Changing it inside the demo still needs a strong one.
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
   logs), deleted on exit; leftovers are swept at the next demo start. Real settings untouched.
 
@@ -693,8 +696,8 @@ Group 6: cleanup (one commit each)
 - [ ] 28 Quick Add opens on the sidebar's selected game, else the last batch game
 - [ ] 29 cache the template-to-preset conversion in account_table.py
 - [ ] 30 split tests/test_vault_service.py and tests/ui/test_phase5_ui.py under ~300 lines;
-      also split `ui/app_controller.py` (324 lines: move backup/export wiring out) and flag
-      `ui/main_window.py` (299) and `core/vault_service.py` (300)
+      also split `ui/app_controller.py` (326 lines: move backup/export wiring out) and
+      `core/vault_service.py` (305); flag `ui/main_window.py` (~300)
 - [ ] 31 move the §13 decision log to docs/DECISIONS.md with a pointer; add known/deferred:
       SEC-M4 (Qt 5.15.2 CVEs, plan PyQt6) and SEC-Low9 (log tracebacks contain full paths);
       README note that log files shouldn't be shared
@@ -716,4 +719,4 @@ vault (demo mode uses a fresh temp folder each time, so it can't show this).
 - UI tests capture message boxes via `messages.confirm`/`messages.show_error` (stubbed by
   default): call them through the `messages` module so the stub applies.
 - Run the app with fake data: `.venv\Scripts\python -m vaultkeeper --demo`
-  (password `demo fake passphrase only`).
+  (password `test`).

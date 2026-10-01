@@ -156,8 +156,8 @@ python -m vaultkeeper --demo   # try it with fake accounts (nothing real is touc
 ```
 
 **Demo mode** creates a temporary vault full of obviously fake accounts in your system temp
-folder, with its own settings and logs. The demo master password is
-`demo fake passphrase only`. Everything is deleted when you quit, and your real settings and
+folder, with its own settings and logs. The demo master password is `test` (allowed only
+for the throwaway demo; real vaults need a strong one). Everything is deleted when you quit, and your real settings and
 vault are never touched.
 
 > A standalone Windows `.exe` (no Python needed) is planned. See the [Roadmap](#roadmap).
