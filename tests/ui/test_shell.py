@@ -59,3 +59,31 @@ def test_demo_title(qtbot: Any) -> None:
     window = MainWindow(demo=True)
     qtbot.addWidget(window)
     assert "DEMO" in window.windowTitle()
+
+
+def test_demo_controller_suggests_new_vaults_inside_demo_folder(
+    qtbot: Any, tmp_path: Path, monkeypatch: Any
+) -> None:
+    from vaultkeeper.config.settings import Settings
+    from vaultkeeper.ui import app_controller
+    from vaultkeeper.ui.qt_adapters import QtTaskRunner
+
+    captured: list[Path] = []
+
+    class FakeCreate:
+        def __init__(self, _factory: Any, _cancel: Any, suggested: Path, parent: Any) -> None:
+            captured.append(suggested)
+            self.service = None
+
+        def exec_(self) -> int:
+            return 0
+
+    monkeypatch.setattr(app_controller, "CreateVaultDialog", FakeCreate)
+    monkeypatch.setattr(app_controller.AppController, "_welcome", lambda self: None)
+    controller = app_controller.AppController(
+        Settings(), tmp_path / "settings.json", QtTaskRunner(), lambda p: None,  # type: ignore[arg-type, return-value]
+        demo=True, new_vault_dir=tmp_path,
+    )
+    qtbot.addWidget(controller.window)
+    controller._create()
+    assert captured == [tmp_path / "new.vault"]

@@ -41,8 +41,10 @@ class AppController(QObject):
         runner: QtTaskRunner,
         service_factory: Callable[[Path], VaultService],
         demo: bool = False,
+        new_vault_dir: Path | None = None,
     ) -> None:
         super().__init__()
+        self._new_vault_dir = new_vault_dir
         self._settings = settings
         self._settings_file = settings_file
         self._runner = runner
@@ -76,8 +78,13 @@ class AppController(QObject):
             self._unlock()
 
     def _create(self) -> None:
+        suggested = (
+            self._new_vault_dir / f"new{VAULT_EXTENSION}"
+            if self._new_vault_dir is not None
+            else default_vault_path()
+        )
         dialog = CreateVaultDialog(
-            self._factory, self._runner.cancel_pending, default_vault_path(), parent=self.window
+            self._factory, self._runner.cancel_pending, suggested, parent=self.window
         )
         if dialog.exec_() and dialog.service is not None:
             self.service = dialog.service

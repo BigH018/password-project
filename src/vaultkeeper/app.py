@@ -71,6 +71,7 @@ def run(argv: list[str] | None = None) -> int:
         runner,
         lambda path: VaultService(path, runner=runner),
         demo=demo_env is not None,
+        new_vault_dir=demo_env.root if demo_env is not None else None,  # demo stays in temp
     )
     QTimer.singleShot(0, controller.start)
     try:
