@@ -505,7 +505,8 @@ items). Grep it when a task touches an earlier choice, and record new decisions 
         windowed (`app.py` already guards prints when stdout is None), bundle dark.qss and
         the icon from `ui/assets/`, spec in `packaging/vaultkeeper.spec`. Antivirus false
         positives: mention, don't work around.
-- [ ] Review fixes (CR = code review, SEC = security audit), started 2026-10-01: IN PROGRESS
+- [x] Review fixes (CR = code review, SEC = security audit), 2026-10-01: all 32 steps done
+      (open follow-ups in docs/DECISIONS.md "Known issues and deferred items")
 
 ### Review fixes: handoff (read this when continuing in a fresh session)
 Work rules the user set: fix in the order below, ONE COMMIT PER FIX. For each fix: check
@@ -576,7 +577,7 @@ Group 5 (done, pushed): small and deferred items
 - [x] 25 CR-L5 native file pickers aren't counted as activity / not closed by
       close_dialogs: try Qt's non-native dialogs; switch if reasonable, else report options
 
-Group 6 (in progress): cleanup (one commit each)
+Group 6 (done): cleanup (one commit each)
 - [x] 26 remove dead code: clean_preset_key, split_tagged_id (only if unused after 10),
       PasteSuggestions.describe, ClipboardGuard.holds_copy, AccountFilter.is_empty,
       InactivityTracker.enabled, AccountForm._current_game. Report whether kdf_needs_upgrade
@@ -597,8 +598,10 @@ Group 6 (in progress): cleanup (one commit each)
 - [x] 31 move the §13 decision log to docs/DECISIONS.md with a pointer; add known/deferred:
       SEC-M4 (Qt 5.15.2 CVEs, plan PyQt6) and SEC-Low9 (log tracebacks contain full paths);
       README note that log files shouldn't be shared
-- [ ] 32 add any missing tests the reviews listed that aren't covered above
-- [ ] Final: whole suite + ruff, summarise all commits, ask for the final push
+- [x] 32 add any missing tests the reviews listed that aren't covered above
+      Only the 32-item summary was available (not the review reports), so no extra tests could
+      be identified; every fix has tests and docs/VAULT_FORMAT.md's required tests all exist.
+- [x] Final: whole suite (1401 passed, 1 skipped) + slow test + ruff pass; final push asked
 
 Open items to mention to the user: confirm by hand that copied passwords don't appear in
 Win+V clipboard history, and that a second copy of the app says "already open" on the real
