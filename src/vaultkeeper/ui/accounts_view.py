@@ -139,6 +139,16 @@ class AccountsPanel(QWidget):
             return None
         return self.model.account_at(self.proxy.mapToSource(rows[0]).row())
 
+    def select_account(self, account_id: str) -> bool:
+        """Select the row showing ``account_id`` (if it's visible). Returns True if found."""
+        for source_row in range(self.model.rowCount()):
+            if self.model.account_at(source_row).id == account_id:
+                proxy_index = self.proxy.mapFromSource(self.model.index(source_row, 0))
+                self.table.selectRow(proxy_index.row())
+                self.table.scrollTo(proxy_index)
+                return True
+        return False
+
     def set_show_passwords(self, show: bool) -> None:
         """Reveal or mask the password column."""
         self.model.set_show_passwords(show)

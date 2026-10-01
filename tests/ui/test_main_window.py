@@ -159,6 +159,35 @@ def test_signals(qtbot: Any, window: mw.MainWindow) -> None:
         window.change_password_action.trigger()
 
 
-def test_add_edit_games_pending_until_4c(window: mw.MainWindow) -> None:
-    for act in (window.add_action, window.edit_action, window.manage_games_action):
-        assert not act.isEnabled()
+def test_add_edit_games_actions_enabled(window: mw.MainWindow) -> None:
+    assert window.add_action.isEnabled() and window.manage_games_action.isEnabled()
+    assert not window.edit_action.isEnabled()  # nothing selected yet
+    window.panel.table.selectRow(0)
+    assert window.edit_action.isEnabled()
+
+
+def test_edit_opens_dialog_for_selected_account(window: mw.MainWindow,
+                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    opened: list[object] = []
+
+    class FakeDialog:
+        def __init__(self, _accounts: object, _games: object, account: object = None,
+                     **_kw: object) -> None:
+            opened.append(account)
+
+        def exec_(self) -> int:
+            return 0
+
+    monkeypatch.setattr(mw, "AccountDialog", FakeDialog)
+    window.panel.table.selectRow(0)
+    selected = window.panel.selected_account()
+    window.edit_action.trigger()
+    assert opened == [selected]
+
+
+def test_select_account_after_refresh(window: mw.MainWindow, unlocked: VaultService) -> None:
+    target = unlocked.data.accounts[5]
+    window.panel.refresh()
+    assert window.panel.selected_account() is None
+    assert window.panel.select_account(target.id)
+    assert window.panel.selected_account() == target

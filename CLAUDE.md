@@ -174,8 +174,9 @@ vaultkeeper/                       repo root
                                    small "Open a different vault file..." link (restore / moved vault)
       create_vault_dialog.py       location + master password + confirm + strength hint
       change_password_dialog.py    change master password (KDF off-thread, closable while busy)
-      account_dialog.py       (P)  full add/edit form
-      game_manager_dialog.py  (P)  add/rename/delete games
+      account_dialog.py            add/edit: AccountForm + live duplicate warning + unsaved-changes
+                                   prompt (force_close() skips it on lock)
+      game_manager_dialog.py       add / rename / change preset / delete games (errors show counts)
       quick_add_dialog.py     (P)  keyboard-first batch entry + paste box + duplicate warning
       settings_dialog.py      (P)  timeouts, backup folder, keep-N, columns
       generator_dialog.py     (P)  password generator UI
@@ -184,7 +185,9 @@ vaultkeeper/                       repo root
         account_table.py           table model (passwords masked) + proxy sorting by ladder
         game_sidebar.py            "All games" + games with counts
         search_bar.py              free text + status/rank/region/label dropdowns -> AccountFilter
-        rank_picker.py        (P)  tier + division combos driven by the game preset
+        account_form.py            all account fields in keyboard order; load()/to_account()
+        rank_picker.py             RankPicker (tier + division) and RegionPicker, preset-driven;
+                                   free text for custom games; legacy values shown, never dropped
         secret_field.py            masked edit with show/hide (copy button in Phase 5)
         strength_meter.py          live master-password strength bar + suggestions
         totp_display.py       (P)  live code + countdown
@@ -212,6 +215,7 @@ vaultkeeper/                       repo root
     ui/                            pytest-qt: test_qt_adapters, test_unlock_dialog (never-silent
                                    backup, no freeze, closable while busy), test_create_vault_dialog,
                                    test_change_password_dialog, test_main_window (real demo vault),
+                                   test_account_dialog, test_game_manager, test_pickers,
                                    test_shell (welcome, controller lock/demo details)
 ```
 
@@ -397,7 +401,11 @@ python -m vaultkeeper  # run the app
 - One vault is the normal case. "Create a new vault" is only offered on the first-run Welcome
   screen. The unlock screen has a small "Open a different vault file..." link (for restoring a
   backup or a moved vault) that opens a file picker directly.
-- Lock closes every open dialog (drafts discarded), cancels pending work, clears the window.
+- Lock closes every open dialog (drafts discarded via `force_close()`, no prompt), cancels
+  pending work, clears the window.
+- Account dialog: rank/region are preset dropdowns (free text for custom games). A stored
+  value not in the preset is shown marked "(not in this game's list)" rather than dropped.
+  After saving, the edited/new row stays selected.
 - Delete key only deletes while the account table has focus. Edit has no keyboard shortcut
   (rows open on double-click/Enter in 4c) so Enter in text fields is never hijacked.
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
@@ -409,10 +417,10 @@ python -m vaultkeeper  # run the app
 - [x] Phase 2: Crypto, storage, vault service, recovery script (pushed 9372fb1)
 - [x] Phase 3: Account/game services, search (committed 0bc7cc3; validation split into
       text_validation.py + validation.py)
-- [ ] Phase 4: Core UI
+- [x] Phase 4: Core UI
   - [x] 4a: foundation, welcome, create, unlock (+ backup offer/banner), task runner, shell, --demo
   - [x] 4b: full main window (sidebar, search, table, lock, change master password)
-  - [ ] 4c: account dialog, game manager
+  - [x] 4c: account dialog, game manager
 - [ ] Phase 5: Clipboard, auto-lock, generator, export, backups
 - [ ] Phase 6: Quick Add, batch mode, paste assist
 - [ ] Phase 7: TOTP

@@ -14,7 +14,9 @@ from vaultkeeper.config.constants import APP_NAME
 from vaultkeeper.core.account_service import AccountService
 from vaultkeeper.core.game_service import GameService
 from vaultkeeper.errors import VaultKeeperError
+from vaultkeeper.ui.account_dialog import AccountDialog
 from vaultkeeper.ui.accounts_view import AccountsPanel
+from vaultkeeper.ui.game_manager_dialog import GameManagerDialog
 from vaultkeeper.ui.messages import confirm, error_text, show_error
 from vaultkeeper.ui.theme import MUTED_STYLE, WARNING_BANNER_STYLE
 
@@ -22,7 +24,6 @@ BACKUP_BANNER = (
     "Opened from the backup copy. When you next save, the damaged vault file will be kept "
     "aside as a separate '.damaged' file and replaced. The backup copy itself is not touched."
 )
-COMING_IN_4C = "Coming in the next build (4c)"
 
 
 class MainWindow(QMainWindow):
@@ -37,6 +38,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{APP_NAME} - DEMO (fake data)" if demo else APP_NAME)
         self.resize(1200, 720)
         self._accounts: AccountService | None = None
+        self._games: GameService | None = None
         self._vault_path = ""
 
         self.banner = QLabel(BACKUP_BANNER, self)
@@ -77,14 +79,14 @@ class MainWindow(QMainWindow):
         self.change_password_action = action("Change master password...")
         self.manage_games_action = action("Manage games...")
         self.quit_action = action("&Quit", "Ctrl+Q")
-        for pending in (self.add_action, self.edit_action, self.manage_games_action):
-            pending.setToolTip(COMING_IN_4C)
-            pending.setStatusTip(COMING_IN_4C)
-
         # Delete key only acts while the table has focus (never while typing in a field).
         self.delete_action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
         self.panel.table.addAction(self.delete_action)
         self.delete_action.triggered.connect(self._delete_selected)
+        self.add_action.triggered.connect(self._add_account)
+        self.edit_action.triggered.connect(self._edit_selected)
+        self.manage_games_action.triggered.connect(self._manage_games)
+        self.panel.activated.connect(self._edit_selected)
         self.show_passwords_action.toggled.connect(self.panel.set_show_passwords)
         self.lock_action.triggered.connect(self.lock_requested)
         self.change_password_action.triggered.connect(self.change_password_requested)
@@ -111,7 +113,7 @@ class MainWindow(QMainWindow):
 
     def show_locked(self) -> None:
         """Locked: drop every row, hide secrets, disable account actions."""
-        self._accounts = None
+        self._accounts = self._games = None
         self.panel.clear()
         self.show_passwords_action.setChecked(False)
         self.banner.hide()
@@ -122,7 +124,7 @@ class MainWindow(QMainWindow):
     def show_unlocked(self, vault_path: str, opened_from_backup: bool,
                       accounts: AccountService, games: GameService) -> None:
         """Unlocked: bind the services and show the accounts."""
-        self._accounts = accounts
+        self._accounts, self._games = accounts, games
         self._vault_path = vault_path
         self.banner.setVisible(opened_from_backup)
         self.stack.setCurrentWidget(self.panel)
@@ -136,16 +138,56 @@ class MainWindow(QMainWindow):
 
     def _update_actions(self) -> None:
         unlocked = self.unlocked
-        for act in (self.lock_action, self.change_password_action, self.show_passwords_action):
+        for act in (self.lock_action, self.change_password_action, self.show_passwords_action,
+                    self.add_action, self.manage_games_action):
             act.setEnabled(unlocked)
-        self.delete_action.setEnabled(unlocked and self.panel.selected_account() is not None)
-        for pending in (self.add_action, self.edit_action, self.manage_games_action):
-            pending.setEnabled(False)  # enabled in 4c
+        selected = unlocked and self.panel.selected_account() is not None
+        self.delete_action.setEnabled(selected)
+        self.edit_action.setEnabled(selected)
         if unlocked:
             self.statusBar().showMessage(
                 f"{self.panel.shown} of {self.panel.total} accounts  |  Vault: {self._vault_path}")
 
     # --- actions ----------------------------------------------------------------------------
+
+    def _after_save(self, account_id: str | None = None) -> None:
+        self.banner.hide()  # a successful save ends the opened-from-backup state
+        self.panel.refresh()
+        if account_id is not None:
+            self.panel.select_account(account_id)  # keep the edited/new row selected
+
+    def _add_account(self) -> None:
+        if self._accounts is None or self._games is None:
+            return
+        games = self._games.list_games()
+        if not games:
+            self.statusBar().showMessage(
+                "Add a game first (for example Valorant), then add accounts to it.", 6000)
+            self._manage_games()
+            games = self._games.list_games() if self._games else []
+            if not games:
+                return
+        dialog = AccountDialog(self._accounts, games,
+                               default_game_id=self.panel.sidebar.current_game_id(), parent=self)
+        if dialog.exec_() and dialog.saved is not None:
+            self._after_save(dialog.saved.id)
+
+    def _edit_selected(self) -> None:
+        account = self.panel.selected_account()
+        if account is None or self._accounts is None or self._games is None:
+            return
+        dialog = AccountDialog(self._accounts, self._games.list_games(), account=account,
+                               parent=self)
+        if dialog.exec_() and dialog.saved is not None:
+            self._after_save(dialog.saved.id)
+
+    def _manage_games(self) -> None:
+        if self._games is None:
+            return
+        dialog = GameManagerDialog(self._games, parent=self)
+        dialog.exec_()
+        if dialog.changed:
+            self._after_save()
 
     def _delete_selected(self) -> None:
         account = self.panel.selected_account()
@@ -160,8 +202,7 @@ class MainWindow(QMainWindow):
         except VaultKeeperError as exc:
             show_error(self, "Could not delete", error_text(exc))
             return
-        self.banner.hide()  # a successful save ends the opened-from-backup state
-        self.panel.refresh()
+        self._after_save()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Closing the window quits the app (the controller locks first)."""

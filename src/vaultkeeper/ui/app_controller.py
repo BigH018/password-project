@@ -135,7 +135,8 @@ class AppController(QObject):
         """Close every open dialog (drafts are discarded: locking beats convenience)."""
         for widget in QApplication.topLevelWidgets():
             if isinstance(widget, QDialog) and widget.isVisible():
-                widget.reject()
+                # force_close skips "discard changes?" prompts: locking always wins.
+                getattr(widget, "force_close", widget.reject)()
 
     def lock(self) -> None:
         """Close dialogs, drop decrypted state, clear the window, ask for the password again."""
