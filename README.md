@@ -379,5 +379,8 @@ your master password. Keeping one on a separate physical drive is still recommen
 
 Released under the [MIT License](LICENSE). Copyright (c) 2026 BigH.
 
+The app icon artwork (`packaging/icon_source.jpg` and the icons made from it) is **not**
+covered by the MIT license. All rights remain with its original artist.
+
 Provided "as is", without warranty of any kind. You are responsible for keeping your master
 password and backups safe.

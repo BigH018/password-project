@@ -127,7 +127,8 @@ vaultkeeper/                       repo root
     recover_vault.py               standalone decrypt-to-stdout (cryptography + argon2-cffi only)
   packaging/
     vaultkeeper.spec          (P)  PyInstaller spec (phase 8)
-    icon_source_32px.ico           the user's original 32px icon (app_icon.ico is built from it)
+    icon_source.jpg                the user's 1920px icon art (app_icon.ico + docs/images/icon.png
+                                   are built from it; third-party art, not MIT: see README)
   src/vaultkeeper/
     __init__.py                    version string only
     __main__.py                    `python -m vaultkeeper` -> main.main()
@@ -222,7 +223,7 @@ vaultkeeper/                       repo root
       styles/
         dark.qss                   dark theme (ASCII, no url()/images; package data)
       assets/
-        app_icon.ico               16-256px icon (pixel-art upscale of the source; package data)
+        app_icon.ico               16-256px icon (smooth downscale of the source; package data)
   tests/
     conftest.py                    fast KDF params, network block (autouse), FakeStore, fixtures
     ui_support.py                  pytest plugin: off-screen Qt, QtTaskRunner, Gate (blocking KDF),
