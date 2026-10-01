@@ -21,6 +21,7 @@ from vaultkeeper.ui.accounts_view import AccountsPanel
 from vaultkeeper.ui.copy_actions import CopyActions
 from vaultkeeper.ui.game_setup_dialog import GameSetupDialog
 from vaultkeeper.ui.generator_dialog import GeneratorDialog
+from vaultkeeper.ui.main_menus import install_toolbar_and_menus
 from vaultkeeper.ui.messages import confirm, error_text, show_error
 from vaultkeeper.ui.quick_add_dialog import QuickAddDialog
 from vaultkeeper.ui.theme import MUTED_STYLE, WARNING_BANNER_STYLE
@@ -43,6 +44,7 @@ class MainWindow(QMainWindow):
     backups_requested = pyqtSignal()
     backup_now_requested = pyqtSignal()
     export_requested = pyqtSignal()
+    settings_requested = pyqtSignal()
     quick_add_opened = pyqtSignal()
     quick_add_closed = pyqtSignal()
 
@@ -105,10 +107,12 @@ class MainWindow(QMainWindow):
         self.backups_action = action("Backups...")
         self.backup_now_action = action("Backup now")
         self.export_action = action("Export encrypted copy...")
+        self.settings_action = action("&Settings...", "Ctrl+,")
         self.generator_action.triggered.connect(self._open_generator)
         self.backups_action.triggered.connect(self.backups_requested)
         self.backup_now_action.triggered.connect(self.backup_now_requested)
         self.export_action.triggered.connect(self.export_requested)
+        self.settings_action.triggered.connect(self.settings_requested)
         # Delete key only acts while the table has focus (never while typing in a field).
         self.delete_action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
         self.panel.table.addAction(self.delete_action)
@@ -123,32 +127,7 @@ class MainWindow(QMainWindow):
         self.change_password_action.triggered.connect(self.change_password_requested)
         self.quit_action.triggered.connect(self.quit_requested)
 
-        toolbar = self.addToolBar("Main")
-        toolbar.setMovable(False)
-        for act in (self.quick_add_action, self.add_action, self.edit_action,
-                    self.delete_action):
-            toolbar.addAction(act)
-        toolbar.addSeparator()
-        for act in self.copy.main_actions:
-            toolbar.addAction(act)
-        toolbar.addSeparator()
-        toolbar.addAction(self.show_passwords_action)
-        toolbar.addSeparator()
-        toolbar.addAction(self.lock_action)
-
-        file_menu = self.menuBar().addMenu("&File")
-        file_menu.addAction(self.change_password_action)
-        file_menu.addAction(self.lock_action)
-        file_menu.addSeparator()
-        file_menu.addAction(self.backup_now_action)
-        file_menu.addAction(self.backups_action)
-        file_menu.addAction(self.export_action)
-        file_menu.addSeparator()
-        file_menu.addAction(self.quit_action)
-        games_menu = self.menuBar().addMenu("&Games")
-        games_menu.addAction(self.manage_games_action)
-        tools_menu = self.menuBar().addMenu("&Tools")
-        tools_menu.addAction(self.generator_action)
+        install_toolbar_and_menus(self)
 
     # --- states -----------------------------------------------------------------------------
 

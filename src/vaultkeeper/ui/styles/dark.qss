@@ -55,7 +55,9 @@ QPushButton:flat:hover {
 }
 
 /* ---- Text inputs ---- */
-QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QComboBox {
+/* QSpinBox is left to Fusion + the dark palette: styling it would hide its arrows
+   (QSS can't draw arrow shapes without image files). */
+QLineEdit, QPlainTextEdit, QTextEdit, QComboBox {
     background: #16181c;
     color: #e6e6e6;
     border: 1px solid #3a3f47;
@@ -64,11 +66,10 @@ QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QComboBox {
     selection-background-color: #3d7eff;
     selection-color: #ffffff;
 }
-QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QSpinBox:focus, QComboBox:focus {
+QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus {
     border-color: #3d7eff;
 }
-QLineEdit:disabled, QPlainTextEdit:disabled, QTextEdit:disabled, QSpinBox:disabled,
-QComboBox:disabled {
+QLineEdit:disabled, QPlainTextEdit:disabled, QTextEdit:disabled, QComboBox:disabled {
     background: #1c1e22;
     color: #6b7079;
     border-color: #2f333a;

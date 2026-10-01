@@ -43,7 +43,7 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | Clipboard, auto-lock, session lock | security/*, ui/session_guard.py, ui/qt_adapters.py, ui/copy_actions.py | tests/test_clipboard.py, test_autolock.py, tests/ui/test_phase5_ui.py |
 | Backups, export | core/backup.py, core/exporter.py, storage/vault_file.py, ui/backup_dialog.py, ui/export_dialog.py | docs/VAULT_FORMAT.md, ui/app_controller.py (wiring) |
 | Password generator | core/generator.py, ui/generator_dialog.py | tests/test_generator.py |
-| Settings, paths, logging | config/*, ui/settings_dialog.py | |
+| Settings, paths, logging | config/*, ui/settings_dialog.py | ui/app_controller.py (`_open_settings`), ui/session_guard.py (apply_settings) |
 | Packaging, dependencies | packaging/, pyproject.toml, requirements*.txt | |
 | A failing test or bug | the failing test file and the module it tests | modules that one calls |
 
@@ -184,7 +184,8 @@ vaultkeeper/                       repo root
       theme.py                     Fusion + dark palette + styles/dark.qss (fallback: palette
                                    only), shared label styles
       welcome_dialog.py            create new vault / open existing file
-      main_window.py               menus, toolbar, backup banner, status bar, delete; hosts AccountsPanel
+      main_window.py               actions, backup banner, status bar, delete; hosts AccountsPanel
+      main_menus.py                toolbar + File/Games/Tools menus built from the window's actions
       accounts_view.py             AccountsPanel: game sidebar | search bar over sortable table
       unlock_dialog.py             master password, busy state, explicit "Try the backup copy",
                                    small "Open a different vault file..." link (restore / moved vault)
@@ -195,7 +196,8 @@ vaultkeeper/                       repo root
       game_setup_dialog.py         Game setup: list + editor (starter, ranks, regions, fields, extras)
       quick_add_dialog.py          Quick Add (AccountDialog subclass): Enter = save & next,
                                    batch values, counter, paste box, Ctrl+Enter anywhere
-      settings_dialog.py      (P)  auto-lock/Quick Add timeouts, clipboard seconds, lock options
+      settings_dialog.py           File -> Settings (Ctrl+,): auto-lock/Quick Add timeouts, clipboard
+                                   seconds, lock switches, restore defaults, Backups... button
       generator_dialog.py          password generator (copy or "use" into the form)
       messages.py                  generic error texts (error_text) + confirm/error boxes
       widgets/
@@ -243,7 +245,8 @@ vaultkeeper/                       repo root
                                    test_phase5_ui (copy, auto-lock, generator, backups, export),
                                    test_quick_add (save & next, batch, paste, keys, timeout),
                                    test_theme (stylesheet loads, offline, palette fallback),
-                                   test_branding (icon, titles, no "?", window hidden while locked)
+                                   test_branding (icon, titles, no "?", window hidden while locked),
+                                   test_settings_dialog (values, defaults, save + apply live)
 ```
 
 ---
@@ -475,6 +478,11 @@ python -m vaultkeeper  # run the app
 - The main window is hidden whenever the vault is locked: welcome/create/unlock dialogs are
   parentless (own taskbar button), `setQuitOnLastWindowClosed(False)` so the controller
   decides when to quit. Locked by minimizing -> the unlock prompt starts minimized.
+- Settings dialog (8b): saved and applied at once (SessionGuard.apply_settings), merged into
+  the current settings so Backups changes made meanwhile are kept. If saving fails the values
+  still apply and the status bar says so. The Windows-lock watcher is always registered and
+  the setting is checked when it fires, so toggling it needs no restart.
+- Spin boxes are left unstyled in dark.qss (QSS can't draw arrows without image files).
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
   logs), deleted on exit; leftovers are swept at the next demo start. Real settings untouched.
 
@@ -495,7 +503,7 @@ python -m vaultkeeper  # run the app
 - [ ] Phase 8: Polish + packaging (IN PROGRESS)
   - [x] 8a: dark theme (dark.qss loaded by theme.py)
   - [x] 8a+: branding (title, icon, taskbar id), main window hidden while locked
-  - [ ] 8b: settings dialog  - [ ] 8c: window geometry  - [ ] 8d: error dialog  - [ ] 8e: .exe
+  - [x] 8b: settings dialog  - [ ] 8c: window geometry  - [ ] 8d: error dialog  - [ ] 8e: .exe
 
 ### Next up: Phase 8 handoff (for a fresh session)
 Present a short plan list first and wait for the user's go, as with earlier phases.

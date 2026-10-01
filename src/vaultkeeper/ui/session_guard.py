@@ -51,8 +51,12 @@ class SessionGuard(QObject):
         self.tracker.set_base_timeout(settings.autolock_minutes * 60)
 
     def watch_session(self, window_id: int) -> bool:
-        """Lock when Windows locks (if enabled). Returns True if the watcher is active."""
-        if self._settings.lock_on_session_lock and self._session_watcher is None:
+        """Listen for Windows locking. Returns True if the watcher is active.
+
+        Always registered, so switching ``lock_on_session_lock`` on later works at once;
+        the setting is checked when the notification arrives.
+        """
+        if self._session_watcher is None:
             self._session_watcher = SessionLockWatcher(window_id, self._session_locked)
         return bool(self._session_watcher and self._session_watcher.active)
 
@@ -72,7 +76,7 @@ class SessionGuard(QObject):
             self.lock_needed.emit("minimized")
 
     def _session_locked(self) -> None:
-        if self.armed:
+        if self.armed and self._settings.lock_on_session_lock:
             self.lock_needed.emit("session")
 
     def _check(self) -> None:

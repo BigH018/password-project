@@ -29,6 +29,7 @@ from vaultkeeper.ui.main_window import MainWindow
 from vaultkeeper.ui.messages import error_text
 from vaultkeeper.ui.qt_adapters import QtTaskRunner
 from vaultkeeper.ui.session_guard import SessionGuard
+from vaultkeeper.ui.settings_dialog import SettingsDialog
 from vaultkeeper.ui.unlock_dialog import UnlockDialog
 from vaultkeeper.ui.welcome_dialog import WelcomeDialog
 
@@ -73,6 +74,7 @@ class AppController(QObject):
         self.window.backups_requested.connect(self._backup_settings)
         self.window.backup_now_requested.connect(self._backup_now)
         self.window.export_requested.connect(self._export)
+        self.window.settings_requested.connect(self._open_settings)
         self.guard.lock_needed.connect(self._auto_lock)
         self.window.quick_add_opened.connect(self._quick_add_opened)
         self.window.quick_add_closed.connect(self.guard.tracker.pop_override)
@@ -227,6 +229,21 @@ class AppController(QObject):
                 # force_close skips "discard changes?" prompts: locking always wins.
                 getattr(widget, "force_close", widget.reject)()
 
+    def _open_settings(self) -> None:
+        """Edit timeouts / lock switches; saved and applied at once (Backups has its own)."""
+        open_backups = self._backup_settings if self.backups is not None else None
+        dialog = SettingsDialog(self._settings, open_backups, parent=self.window)
+        if not dialog.exec_():
+            return
+        # Merge into the current settings: the Backups dialog may have changed them meanwhile.
+        self._settings = update_settings(self._settings, **dialog.values())
+        self.guard.apply_settings(self._settings)
+        if self._save_settings():
+            self.window.statusBar().showMessage("Settings saved.", 4000)
+        else:
+            self.window.statusBar().showMessage(
+                "Settings apply now but could not be saved for next time.", 10000)
+
     def _quick_add_opened(self) -> None:
         """You type from another window while Quick Add is open: use the longer timeout."""
         self.guard.tracker.push_override(self._settings.quick_add_autolock_minutes * 60)
@@ -267,8 +284,10 @@ class AppController(QObject):
         self._settings = update_settings(self._settings, vault_path=str(path))
         self._save_settings()
 
-    def _save_settings(self) -> None:
+    def _save_settings(self) -> bool:
         try:
             save_settings(self._settings_file, self._settings)
         except VaultIOError:
             log.warning("Could not save settings")
+            return False
+        return True
