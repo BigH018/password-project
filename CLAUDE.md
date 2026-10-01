@@ -562,36 +562,112 @@ python -m vaultkeeper  # run the app
 - [ ] Phase 8: Polish + packaging (IN PROGRESS)
   - [x] 8a: dark theme (dark.qss loaded by theme.py)
   - [x] 8a+: branding (title, icon, taskbar id), main window hidden while locked
-  - [x] 8b: settings dialog  - [x] 8c: window geometry  - [x] 8d: error dialog  - [ ] 8e: .exe
+  - [x] 8b: settings dialog  - [x] 8c: window geometry  - [x] 8d: error dialog
+  - [ ] 8e: .exe (after the review fixes below). Decided: PyInstaller one-folder build,
+        windowed (`app.py` already guards prints when stdout is None), bundle dark.qss and
+        the icon from `ui/assets/`, spec in `packaging/vaultkeeper.spec`. Antivirus false
+        positives: mention, don't work around.
+- [ ] Review fixes (CR = code review, SEC = security audit), started 2026-10-01: IN PROGRESS
 
-### Next up: Phase 8 handoff (for a fresh session)
-Present a short plan list first and wait for the user's go, as with earlier phases.
-Scope agreed so far:
-1. Full dark theme in `ui/styles/dark.qss`, loaded at startup (replaces the interim
-   palette in `ui/theme.py`; keep the shared label styles working).
-2. Settings dialog (`ui/settings_dialog.py`): auto-lock minutes, Quick Add auto-lock
-   minutes, clipboard clear seconds, lock on minimize, lock on Windows session lock, and a
-   button to the existing Backups dialog. Save via `config/settings.py`; apply live via
-   `SessionGuard.apply_settings`.
-3. Remember window size/position (new non-secret settings field; settings JSON is
-   versioned, add with a default so old files still load).
-4. Error handling polish: a generic "something went wrong" dialog from the exception
-   hook (type/location logged, never messages), and friendly messages everywhere.
-5. Windows .exe with PyInstaller: `packaging/vaultkeeper.spec`, windowed (no console;
-   `app.py` already guards prints when stdout is None), bundle dark.qss. Antivirus false
-   positives are a known PyInstaller issue: mention, don't work around.
-Decided 2026-10-01: PyInstaller one-folder build (faster start, fewer AV false positives);
-the error dialog lets the user keep working (every change is already saved); no column
-hiding. The user will supply an app icon (`icon.ico`/`icon.png` in the repo root, to be
-moved into `packaging/`; used for the exe and the window).
+### Review fixes: handoff (read this when continuing in a fresh session)
+Work rules the user set: fix in the order below, ONE COMMIT PER FIX. For each fix: check
+whether it's already done; write the failing test first and confirm it fails for the RIGHT
+reason; fix; run the relevant tests, then the full suite + ruff; `git status` +
+`git diff --cached --stat` (nothing sensitive staged); commit locally with a plain message,
+no attribution. Update the map/routing/docs in the same commit. STOP after each group:
+summarise, ask "I think this is a good point to push. Can I push to GitHub?" with the commit
+list, and wait (push only on a yes in that turn). No vault format change expected: if one
+is needed, stop and ask. If a fix is bigger or riskier than expected, stop and say so. If
+you disagree with a finding, say so with evidence instead of changing code. If context gets
+long: finish the group, ask for the push, and tell the user to continue with "continue from
+Group N". `docs/DECISIONS.md` doesn't exist yet (step 31 creates it).
+
+Group 1 (done, pushed):
+- [x] 1 SEC-H1 user data never rendered as HTML (`ui/safe_text.py`, architecture rule)
+- [x] 2 SEC-H2 SecretField.clear() wipes undo history
+- [x] 3 SEC-Low2 paste assist keeps secret values exactly as pasted (no NFC)
+
+Group 2 (done, pushed with this CLAUDE.md update):
+- [x] 4 CR-H1/SEC-Low8 quarantine copies the damaged main file, never moves it
+- [x] 5 CR-L2 a main file that no longer decrypts never becomes `.bak`
+- [x] 6 CR-M1/SEC-M1 after a password change: `.bak` re-saved, backup now, offer to delete
+      old-password backups (found by header salt)
+- [x] 7 CR-H2 backup failures logged (type only) + banner until a backup works; status
+      times in settings; Backups dialog shows last success
+- [x] 8 SEC-M2 instance lock (`VaultInstanceLock`, QLockFile) + save refused if the file
+      changed on disk (`core/vault_disk.py`, VaultConflictError)
+
+Group 3 (next): entry workflow and lock rule
+- [ ] 9 CR-M2 switching game on the account form resets rank/region not in the new game's
+      list; "not in list" values are kept only for the account's own stored game
+- [ ] 10 CR-M3 Tag empty + Name contains name#tag -> split with split_tagged_id (focus-out
+      or save)
+- [ ] 11 CR-M4 deleteLater() on context menus after exec_() (copy_actions.py) and on the
+      QMessageBox in messages.py (nothing holding secrets survives a lock); test menus deleted
+- [ ] 12 CR-L1 backup rotation sorts by parsed timestamp + counter, not file name
+      (same-second backups)
+- [ ] 13 SEC-M3 show "Last saved: <updated_at>" on unlock; keep last-seen updated_at per
+      vault path in settings (timestamp only); warn if the vault goes backwards in time
+
+Group 4: input and key-derivation hardening
+- [ ] 14 SEC-Low1 password_policy: NFC first, strip surrounding whitespace and Unicode Cf
+      before length/common-list checks (tests: decomposed chars, trailing space, ZWSP)
+- [ ] 15 SEC-Low3 reject Unicode Cf in names, logins, identity fields (ZWJ only if needed
+      for emoji: tell the user); tests for LRM, RLM, ZWSP, word joiner, soft hyphen, tag chars
+- [ ] 16 SEC-Low4/5 Argon2 HashingError (e.g. low memory) -> clear VaultKeeperError; lone
+      surrogates (UnicodeEncodeError) in kdf.py -> VaultAuthError without echoing the char
+- [ ] 17 SEC-Low7 temp files opened exclusively (O_EXCL, no symlink following) in
+      vault_file.py and the settings writer; warn (don't block) at create/open if the folder
+      looks writable by other users (e.g. directly under C:\)
+- [ ] 18 SEC-Low6 "Show passwords" switches off after a configurable timeout (default 30 s)
+      and on lock; optional setting (off, Windows only, tested no-op elsewhere) for
+      SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)
+
+Group 5: small and deferred items
+- [ ] 19 CR-L3 full paths required in backup/export dialogs; unreadable folders handled
+      without "Something went wrong"; don't list the folder on every keystroke (debounce or
+      on confirm)
+- [ ] 20 CR-L7 tell the user where the .damaged copy was saved (`last_damaged_copy`)
+- [ ] 21 CR-L4 game setup warns before discarding unsaved edits (switching game, Close)
+- [ ] 22 CR-L6 backups off the UI thread via the injected TaskRunner; keep the failure
+      banner; lock waits for or safely cancels a running backup
+- [ ] 23 CR-L8 `_prepare_change` must not read `self._session` on the worker thread: pass
+      what it needs as arguments (it also copies `disk_digest` now)
+- [ ] 24 CR-L9 directory fsync failure after a successful replace: don't report "could not
+      save" or undo the change; log the type and carry on
+- [ ] 25 CR-L5 native file pickers aren't counted as activity / not closed by
+      close_dialogs: try Qt's non-native dialogs; switch if reasonable, else report options
+
+Group 6: cleanup (one commit each)
+- [ ] 26 remove dead code: clean_preset_key, split_tagged_id (only if unused after 10),
+      PasteSuggestions.describe, ClipboardGuard.holds_copy, AccountFilter.is_empty,
+      InactivityTracker.enabled, AccountForm._current_game. Report whether kdf_needs_upgrade
+      is used (propose an upgrade prompt, don't build) and whether pyotp is still needed
+- [ ] 27 make `_BIDI_CONTROLS` public, update importers
+- [ ] 28 Quick Add opens on the sidebar's selected game, else the last batch game
+- [ ] 29 cache the template-to-preset conversion in account_table.py
+- [ ] 30 split tests/test_vault_service.py and tests/ui/test_phase5_ui.py under ~300 lines;
+      also split `ui/app_controller.py` (317 lines: move backup/export wiring out) and flag
+      `ui/main_window.py` (299) and `core/vault_service.py` (300)
+- [ ] 31 move the §13 decision log to docs/DECISIONS.md with a pointer; add known/deferred:
+      SEC-M4 (Qt 5.15.2 CVEs, plan PyQt6) and SEC-Low9 (log tracebacks contain full paths);
+      README note that log files shouldn't be shared
+- [ ] 32 add any missing tests the reviews listed that aren't covered above
+- [ ] Final: whole suite + ruff, summarise all commits, ask for the final push
+
 Open items to mention to the user: confirm by hand that copied passwords don't appear in
-Win+V clipboard history (automated tests can't see the real Windows panel); optional
-column hiding was deferred to Phase 8 settings.
+Win+V clipboard history, and that a second copy of the app says "already open" on the real
+vault (demo mode uses a fresh temp folder each time, so it can't show this).
 
 ### Practical notes for future sessions
 - The file-writing tool can turn `\uXXXX`/`\x..` escapes into raw characters: write such
   characters with `chr(...)`, and run the tests (ASCII check) after writing.
 - Long multi-line patches through bash heredocs sometimes fail to parse: write a small
-  patch script to the scratchpad and run it instead.
+  patch script to the scratchpad and run it instead. In heredoc'd Python, a `\n` escape inside a
+  string can still end up as a real newline: use the Edit tool for lines with escapes.
+- Tests: never call `monkeypatch.undo()`. It also lifts the autouse network block (same
+  monkeypatch instance); use `with monkeypatch.context() as patch:` instead.
+- UI tests capture message boxes via `messages.confirm`/`messages.show_error` (stubbed by
+  default): call them through the `messages` module so the stub applies.
 - Run the app with fake data: `.venv\Scripts\python -m vaultkeeper --demo`
   (password `demo fake passphrase only`).
