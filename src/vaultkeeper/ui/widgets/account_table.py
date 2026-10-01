@@ -6,6 +6,7 @@ from typing import Any
 
 from PyQt5.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt
 
+from vaultkeeper.config.constants import GamePreset
 from vaultkeeper.core.game_template import CustomField, FieldKind
 from vaultkeeper.core.models import Account, Game
 from vaultkeeper.core.search import rank_label, rank_sort_key
@@ -34,6 +35,7 @@ class AccountTableModel(QAbstractTableModel):
         super().__init__(parent)
         self._rows: list[Account] = []
         self._games: dict[str, Game] = {}
+        self._presets: dict[str, GamePreset] = {}  # built once per set_rows, not per cell
         self._columns = COLUMNS
         self._extra_fields: dict[str, CustomField] = {}
         self._show_passwords = False
@@ -50,6 +52,7 @@ class AccountTableModel(QAbstractTableModel):
         self.beginResetModel()
         self._rows = list(accounts)
         self._games = dict(games)
+        self._presets = {game_id: game.rank_preset for game_id, game in self._games.items()}
         columns = [c for c in COLUMNS if show_game or c[0] != "game"]
         if single_game is not None:
             template = single_game.template
@@ -112,7 +115,8 @@ class AccountTableModel(QAbstractTableModel):
                 return ""
             return account.password if self._show_passwords else MASK
         if key == "rank":
-            return rank_label(account, game.rank_preset) if game else ""
+            preset = self._presets.get(account.game_id)
+            return rank_label(account, preset) if preset else ""
         if key == "region":
             return account.region or ""
         if key == "status":
@@ -129,8 +133,8 @@ class AccountTableModel(QAbstractTableModel):
         if key == "password":
             return ""
         if key == "rank":
-            game = self._games.get(account.game_id)
-            return rank_sort_key(account, game.rank_preset) if game else (2, 0, 0, "")
+            preset = self._presets.get(account.game_id)
+            return rank_sort_key(account, preset) if preset else (2, 0, 0, "")
         if key == "updated":
             return account.updated_at
         return self._value(account, key).casefold()

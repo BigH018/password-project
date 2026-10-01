@@ -240,7 +240,8 @@ vaultkeeper/                       repo root
       error_dialog.py              ErrorReporter: "Something went wrong" notice for uncaught errors
                                    (queued, any thread, one at a time, Open log folder)
       widgets/
-        account_table.py           table model (passwords masked, extra columns, never secret) + proxy
+        account_table.py           table model (passwords masked, extra columns, never secret) + proxy;
+                                   rank presets cached per set_rows
         game_sidebar.py            "All games" + games with counts
         search_bar.py              free text + status/rank/region/label dropdowns -> AccountFilter
         account_form.py            form built from the game template (hidden fields, extra fields)
@@ -308,6 +309,7 @@ vaultkeeper/                       repo root
                                    test_reveal_and_capture (Show passwords timeout, capture),
                                    test_dialog_paths (full paths, unreadable folders, debounce),
                                    test_file_pickers (non-native, closed on lock, activity),
+                                   test_account_table (rank preset built once per game),
                                    test_secret_field (clear() wipes undo in all password dialogs)
 ```
 
@@ -729,7 +731,7 @@ Group 6 (in progress): cleanup (one commit each)
       unused (removal awaits the user's OK).
 - [x] 27 make `_BIDI_CONTROLS` public (now `BIDI_CONTROLS`), update importers
 - [x] 28 Quick Add opens on the sidebar's selected game, else the last batch game
-- [ ] 29 cache the template-to-preset conversion in account_table.py
+- [x] 29 cache the template-to-preset conversion in account_table.py
 - [ ] 30 split tests/test_vault_service.py and tests/ui/test_phase5_ui.py under ~300 lines;
       also split `ui/app_controller.py` (394 lines: move backup/export wiring out),
       `core/backup.py` (306: e.g. old-password helpers out) and
