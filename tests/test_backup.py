@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import FAST_KDF, MASTER
+from conftest import FAST_KDF, MASTER, OTHER_MASTER
 from vaultkeeper.core.backup import BackupService
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import VaultIOError
@@ -114,3 +114,51 @@ def test_name_collision_gets_suffix(vault: VaultService, tmp_path: Path) -> None
                             stamp=lambda: "20260101-000000")
     first, second = backups.backup_now(), backups.backup_now()
     assert first != second and second.name.endswith("-2.vault")
+
+
+# --- CR-M1/SEC-M1: backups after a master-password change ----------------------------------
+
+
+def test_after_password_change_backs_up_at_once(vault: VaultService, tmp_path: Path,
+                                                clock: Clock) -> None:
+    backups = _service(vault, tmp_path, clock, interval=60)
+    backups.backup_now()
+    vault.change_password(MASTER, OTHER_MASTER)
+    target = backups.after_password_change()  # ignores the 60-minute interval
+    assert target is not None
+    VaultService(target, kdf_params=FAST_KDF).unlock(OTHER_MASTER)
+
+
+def test_old_password_backups_found_by_salt(vault: VaultService, tmp_path: Path,
+                                            clock: Clock) -> None:
+    backups = _service(vault, tmp_path, clock)
+    first = backups.backup_now()
+    second = backups.backup_now()
+    assert backups.backups_with_old_password() == []
+    vault.change_password(MASTER, OTHER_MASTER)
+    assert not backups.has_backup_with_current_password()
+    assert backups.backups_with_old_password() == [first, second]
+    newest = backups.after_password_change()
+    assert backups.has_backup_with_current_password()
+    assert backups.backups_with_old_password() == [first, second]
+    assert backups.delete_backups([first, second]) == 2
+    assert backups.list_backups() == [newest]
+
+
+def test_unreadable_backup_is_never_offered_for_deletion(vault: VaultService, tmp_path: Path,
+                                                         clock: Clock) -> None:
+    backups = _service(vault, tmp_path, clock)
+    junk = tmp_path / "backups" / "my-backup-20200101-000000.vault"
+    junk.parent.mkdir(parents=True)
+    junk.write_bytes(b"not a vault")
+    assert backups.backups_with_old_password() == []
+
+
+def test_delete_backups_only_touches_this_vaults_backups(vault: VaultService, tmp_path: Path,
+                                                         clock: Clock) -> None:
+    backups = _service(vault, tmp_path, clock)
+    kept = backups.backup_now()
+    other = tmp_path / "backups" / "notes.txt"
+    other.write_text("fake", encoding="utf-8")
+    assert backups.delete_backups([vault.path, other, tmp_path / "elsewhere.vault"]) == 0
+    assert vault.path.exists() and other.exists() and kept.exists()

@@ -5,6 +5,8 @@ password and never contains plaintext. Policy (approved):
 - after a save, at most one backup per ``min_interval_minutes``;
 - on lock / exit if anything changed since the last backup;
 - "Backup now" at any time;
+- right after a master-password change (older backups still open with the OLD password;
+  ``backups_with_old_password`` finds them by their header salt so the user can delete them);
 - keep the newest ``keep`` backups of this vault, delete older ones.
 """
 
@@ -18,8 +20,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 from vaultkeeper.config.constants import VAULT_EXTENSION
-from vaultkeeper.errors import VaultIOError
-from vaultkeeper.storage.vault_file import copy_file_verified
+from vaultkeeper.crypto import header
+from vaultkeeper.errors import VaultIOError, VaultKeeperError
+from vaultkeeper.storage.vault_file import copy_file_verified, read_vault_bytes
 
 log = logging.getLogger(__name__)
 
@@ -118,6 +121,48 @@ class BackupService:
         if self.enabled and self.dirty:
             return self.backup_now()
         return None
+
+    def after_password_change(self) -> Path | None:
+        """Back up at once (ignoring the interval) so a backup with the new password exists."""
+        return self.backup_now() if self.enabled else None
+
+    def _salt(self, path: Path) -> bytes | None:
+        try:
+            return header.unpack(read_vault_bytes(path))[0].salt
+        except VaultKeeperError:
+            return None  # unreadable or not a vault: never classified, never offered
+
+    def backups_with_old_password(self) -> list[Path]:
+        """Backups made before a master-password change (oldest first).
+
+        Every password change uses a fresh salt, so a backup whose header salt differs from
+        the vault's opens with an older password. Unreadable files are left out.
+        """
+        current = self._salt(self._vault)
+        if current is None:
+            return []
+        return [p for p in self.list_backups() if self._salt(p) not in (None, current)]
+
+    def has_backup_with_current_password(self) -> bool:
+        """Whether at least one backup opens with the current master password."""
+        current = self._salt(self._vault)
+        return current is not None and any(self._salt(p) == current
+                                           for p in self.list_backups())
+
+    def delete_backups(self, paths: list[Path]) -> int:
+        """Delete the given files if they are this vault's backups. Returns how many."""
+        ours = set(self.list_backups())
+        deleted = 0
+        for path in paths:
+            if path in ours:
+                try:
+                    path.unlink()
+                except OSError as exc:
+                    log.warning("Could not delete an old backup (%s)", type(exc).__name__)
+                    continue
+                deleted += 1
+        log.info("Deleted %d old-password backup(s)", deleted)
+        return deleted
 
     def _rotate(self) -> None:
         backups = self.list_backups()

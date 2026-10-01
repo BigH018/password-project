@@ -21,7 +21,7 @@ from vaultkeeper.core.game_service import GameService
 from vaultkeeper.core.serialization import dumps_payload
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import VaultKeeperError
-from vaultkeeper.ui.backup_dialog import BackupDialog
+from vaultkeeper.ui.backup_dialog import BackupDialog, after_password_change
 from vaultkeeper.ui.change_password_dialog import ChangePasswordDialog
 from vaultkeeper.ui.create_vault_dialog import CreateVaultDialog
 from vaultkeeper.ui.export_dialog import ExportDialog
@@ -219,7 +219,8 @@ class AppController(QObject):
         dialog = ChangePasswordDialog(self.service, self._runner.cancel_pending, self.window)
         if dialog.exec_():
             self.window.banner.setVisible(self.service.opened_from_backup)
-            self.window.statusBar().showMessage("Master password changed.", 5000)
+            note = after_password_change(self.window, self.backups) if self.backups else ""
+            self.window.statusBar().showMessage(f"Master password changed. {note}", 10000)
 
     def close_dialogs(self) -> None:
         """Close every open dialog (drafts are discarded: locking beats convenience)."""

@@ -20,11 +20,41 @@ from PyQt5.QtWidgets import (
 from vaultkeeper.config import constants as c
 from vaultkeeper.core.backup import BackupService
 from vaultkeeper.errors import VaultKeeperError
+from vaultkeeper.ui import messages
 from vaultkeeper.ui.messages import error_text
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE, WARNING_BANNER_STYLE
 
 FolderChooser = Callable[[QWidget, str], str]
+OLD_BACKUPS_TEXT = (
+    "{count} older backup(s) in your backup folder still open with your OLD master "
+    "password.\n\nA backup with your new password was just made. Delete the older ones now?")
+
+
+def after_password_change(parent: QWidget | None, backups: BackupService) -> str:
+    """Back up at once, then offer to delete backups that open with the old password.
+
+    Deletion is only offered once a backup with the new password exists. Returns a status
+    line for the window ("" if backups are off and there is nothing to say).
+    """
+    if not backups.enabled:
+        return ""
+    try:
+        backups.after_password_change()
+    except VaultKeeperError as exc:
+        failed = f"Backup failed: {error_text(exc)} "
+    else:
+        failed = ""
+    old = backups.backups_with_old_password()
+    if not old:
+        return failed or "Backup saved with your new master password."
+    kept = f"{failed}{len(old)} older backup(s) still open with your old master password."
+    if not backups.has_backup_with_current_password():
+        return kept
+    if not messages.confirm(parent, "Older backups", OLD_BACKUPS_TEXT.format(count=len(old)),
+                            ok_text="Delete older backups"):
+        return kept
+    return f"Deleted {backups.delete_backups(old)} older backup(s)."
 
 
 def _choose_folder(parent: QWidget, current: str) -> str:

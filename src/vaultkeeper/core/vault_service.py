@@ -30,7 +30,13 @@ from vaultkeeper.crypto.kdf import (
     new_salt,
     wipe,
 )
-from vaultkeeper.errors import VaultAuthError, VaultFormatError, VaultIOError, VaultLockedError
+from vaultkeeper.errors import (
+    VaultAuthError,
+    VaultFormatError,
+    VaultIOError,
+    VaultKeeperError,
+    VaultLockedError,
+)
 from vaultkeeper.storage import vault_file
 
 log = logging.getLogger(__name__)
@@ -182,6 +188,15 @@ class VaultService:
             raise
         self._replace_session(session)
         log.info("Master password changed")
+        self._refresh_backup_copy()
+
+    def _refresh_backup_copy(self) -> None:
+        """After a password change ``.bak`` still opens with the OLD password: replace it with
+        a copy of the new file (same data). A failure only means the next save does it."""
+        try:
+            vault_file.copy_file_verified(self._path, self.backup_path)
+        except VaultKeeperError as exc:
+            log.warning("Could not refresh .bak after password change (%s)", type(exc).__name__)
 
     def _replace_session(self, session: _Session) -> None:
         old = self._session

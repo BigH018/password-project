@@ -162,7 +162,8 @@ vaultkeeper/                       repo root
       account_service.py           account CRUD + duplicate detection (warning only)
       game_service.py              add (starter/template) / rename / set_template (never blocked) / delete
       search.py                    AccountFilter, free-text search (never secrets), facets, rank sort key
-      backup.py                    rotating backups (byte copies of the encrypted vault), keep N
+      backup.py                    rotating backups (byte copies of the encrypted vault), keep N;
+                                   after a password change: back up now, find old-password backups (salt)
       exporter.py                  encrypted export (own password, file kind EXPORT, .vault)
       entry_session.py             Quick Add batch state: sticky game/region/status + counter
       paste_assist.py              paste block -> field suggestions (pure, never saves)
@@ -183,7 +184,8 @@ vaultkeeper/                       repo root
                                    ActivityFilter, SessionLockWatcher (Windows lock via ctypes)
       session_guard.py             ClipboardGuard + auto-lock wiring; emits lock_needed(reason)
       copy_actions.py              copy actions (Ctrl+B/C/E on the table) + right-click menu
-      backup_dialog.py             backup folder / keep N / interval + Backup now
+      backup_dialog.py             backup folder / keep N / interval + Backup now;
+                                   after_password_change (offer to delete old-password backups)
       export_dialog.py             encrypted export (own password; cancel writes nothing)
       app_controller.py            screen flow: welcome -> create/unlock -> main; lock (closes dialogs); quit
       branding.py                  app icon (all .ico sizes) on every window, Windows taskbar
@@ -259,6 +261,7 @@ vaultkeeper/                       repo root
                                    test_account_dialog, test_game_setup, test_pickers,
                                    test_shell (welcome, controller lock/demo details),
                                    test_phase5_ui (copy, auto-lock, generator, backups, export),
+                                   test_backup_ui (backups after a password change),
                                    test_quick_add (save & next, batch, paste, keys, timeout),
                                    test_theme (stylesheet loads, offline, palette fallback),
                                    test_branding (icon, titles, no "?", window hidden while locked),
@@ -432,6 +435,9 @@ python -m vaultkeeper  # run the app
 - Riot ID = name + optional tag. Login URL is copy-only (no "open in browser").
 - Deleting a game with accounts is blocked. Export uses a separate password (import later).
 - Backups: after a save (max one per 10 min) plus on lock/exit if changed. Keep the last 10.
+- After a master-password change (CR-M1/SEC-M1): `.bak` is re-saved under the new password,
+  a backup is made at once, and the user is offered to delete backups that still open with the
+  old password (found by header salt; only offered once a new-password backup exists).
 - Paste assist also reads `user:`/`pass:` style lines. It never saves automatically.
 - Defaults: auto-lock 5 min, Quick Add inactivity 15 min, lock on minimize and on Windows
   session lock, clipboard clear 15 s. All configurable.

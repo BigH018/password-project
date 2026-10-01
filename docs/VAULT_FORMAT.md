@@ -131,7 +131,9 @@ Storage stays bytes-only. The verify callback (decrypt + parse) is injected by `
 
 - **Backups** (`core/backup.py`) are byte-for-byte copies of the encrypted vault file,
   written atomically and compared with the source before they replace anything. They open
-  with the same master password. Name: `<vault stem>-backup-YYYYMMDD-HHMMSS.vault`.
+  with the same master password. After a master-password change, older backups still open with the old
+  password: the app backs up at once and offers to delete them (identified by their header
+  salt). `.bak` is re-saved under the new password right after the change. Name: `<vault stem>-backup-YYYYMMDD-HHMMSS.vault`.
 - **Exports** (`core/exporter.py`) are the same format with `file_kind = 2` and their own
   password, salt and key. They're decrypted and parsed before replacing anything. The app
   refuses to open an export as a vault (kind check). The recovery script reads both.

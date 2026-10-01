@@ -206,11 +206,40 @@ def test_password_change_rotates_old_file_normally(make_service: Factory,
     svc = make_service()
     svc.create(MASTER)
     _populate(svc)
-    before = vault_path.read_bytes()
     svc.change_password(MASTER, OTHER_MASTER)
     assert svc.last_damaged_copy is None
     assert not list(vault_path.parent.glob("*.damaged-*"))
-    assert svc.backup_path.read_bytes() == before
+
+
+def test_password_change_resaves_bak_under_new_password(make_service: Factory,
+                                                         vault_path: Path) -> None:
+    """CR-M1/SEC-M1: after a change, .bak must not still open with the old password."""
+    svc = make_service()
+    svc.create(MASTER)
+    _populate(svc)
+    svc.change_password(MASTER, OTHER_MASTER)
+    svc.lock()
+    make_service().unlock(OTHER_MASTER, use_backup=True)
+    with pytest.raises(VaultAuthError):
+        make_service().unlock(MASTER, use_backup=True)
+
+
+def test_password_change_succeeds_even_if_bak_refresh_fails(
+    make_service: Factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    svc = make_service()
+    svc.create(MASTER)
+    _populate(svc)
+
+    def fail(*_a: object) -> None:
+        raise VaultIOError("simulated")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(vault_file, "copy_file_verified", fail)
+        svc.change_password(MASTER, OTHER_MASTER)
+    svc.save()  # the next normal save rotates .bak to the new password anyway
+    svc.lock()
+    make_service().unlock(OTHER_MASTER, use_backup=True)
 
 
 def test_failed_save_after_opening_backup_keeps_vault_and_retries(
