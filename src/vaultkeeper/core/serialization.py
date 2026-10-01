@@ -2,8 +2,8 @@
 
 Loading checks *structure* (types, ids, references, timestamps, statuses) and rejects unknown
 keys, because silently dropping them would lose data on the next save. It deliberately does
-NOT check ranks or regions against the current presets: if a game renames a tier, old vaults
-must still open. Preset rules are applied when an account is edited (core/validation.py).
+NOT check ranks, regions or extra values against the game templates: editing a template must
+never stop a vault from opening. Template rules apply when an account is edited.
 
 Error messages name the JSON path (e.g. ``accounts[3].status``), never the value.
 """
@@ -12,20 +12,21 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
 from vaultkeeper.config.constants import STATUSES
+from vaultkeeper.core.migrations import MIGRATIONS
 from vaultkeeper.core.models import SCHEMA_VERSION, Account, Game, Rank, VaultData
+from vaultkeeper.core.template_codec import template_from_dict, template_to_dict
 from vaultkeeper.errors import VaultFormatError
 
-# migrate_vN_to_vN+1 functions, keyed by the version they upgrade FROM.
-MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {}
+__all__ = ["MIGRATIONS", "dumps_payload", "loads_payload", "migrate", "vault_from_dict",
+           "vault_to_dict"]
 
 _TOP_KEYS = frozenset({"schema_version", "games", "accounts", "meta"})
 _META_KEYS = frozenset({"created_at", "updated_at"})
-_GAME_KEYS = frozenset({"id", "name", "preset"})
+_GAME_KEYS = frozenset({"id", "name", "template"})
 _RANK_KEYS = frozenset({"tier", "division"})
 _ACCOUNT_STR = (
     "id", "game_id", "display_name", "login_username", "password", "email", "status",
@@ -34,7 +35,7 @@ _ACCOUNT_STR = (
 _ACCOUNT_OPT_STR = (
     "tag", "email_password", "email_login_url", "region", "recovery_email", "totp_secret",
 )  # fmt: skip
-_ACCOUNT_KEYS = frozenset((*_ACCOUNT_STR, *_ACCOUNT_OPT_STR, "rank", "tags"))
+_ACCOUNT_KEYS = frozenset((*_ACCOUNT_STR, *_ACCOUNT_OPT_STR, "rank", "tags", "extra"))
 
 
 def _fail(path: str) -> VaultFormatError:
@@ -49,6 +50,7 @@ def _account_to_dict(account: Account) -> dict[str, Any]:
     out.update({name: getattr(account, name) for name in _ACCOUNT_OPT_STR})
     out["rank"] = {"tier": account.rank.tier, "division": account.rank.division}
     out["tags"] = list(account.tags)
+    out["extra"] = dict(account.extra)
     return out
 
 
@@ -56,7 +58,8 @@ def vault_to_dict(data: VaultData) -> dict[str, Any]:
     """Convert VaultData to a JSON-safe dict (current schema version)."""
     return {
         "schema_version": SCHEMA_VERSION,
-        "games": [{"id": g.id, "name": g.name, "preset": g.preset} for g in data.games],
+        "games": [{"id": g.id, "name": g.name, "template": template_to_dict(g.template)}
+                  for g in data.games],
         "accounts": [_account_to_dict(a) for a in data.accounts],
         "meta": {"created_at": data.created_at, "updated_at": data.updated_at},
     }
@@ -127,12 +130,21 @@ def _tags(value: Any, path: str) -> tuple[str, ...]:
     return tuple(_str(item, f"{path}[{i}]") for i, item in enumerate(value))
 
 
+def _extra(value: Any, path: str) -> tuple[tuple[str, str], ...]:
+    if not isinstance(value, dict):
+        raise _fail(path)
+    for key, item in value.items():
+        if not isinstance(key, str) or not isinstance(item, str):
+            raise _fail(path)
+    return tuple(sorted(value.items()))
+
+
 def _game(value: Any, path: str) -> Game:
     obj = _obj(value, path, _GAME_KEYS)
     return Game(
         id=_uuid(obj["id"], f"{path}.id"),
         name=_str(obj["name"], f"{path}.name"),
-        preset=_str(obj["preset"], f"{path}.preset"),
+        template=template_from_dict(obj["template"], f"{path}.template"),
     )
 
 
@@ -147,7 +159,8 @@ def _account(value: Any, path: str) -> Account:
     if fields["status"] not in STATUSES:
         raise _fail(f"{path}.status")
     return Account(**fields, rank=_rank(obj["rank"], f"{path}.rank"),
-                   tags=_tags(obj["tags"], f"{path}.tags"))
+                   tags=_tags(obj["tags"], f"{path}.tags"),
+                   extra=_extra(obj["extra"], f"{path}.extra"))
 
 
 # --- Decoding ---------------------------------------------------------------------------------

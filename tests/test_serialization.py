@@ -39,13 +39,17 @@ def test_payload_includes_schema_version(fake_vault: VaultData) -> None:
     assert _dict(fake_vault)["schema_version"] == SCHEMA_VERSION
 
 
-def test_unknown_preset_and_tier_still_load(fake_vault: VaultData) -> None:
-    """Old vaults must open even if presets change later."""
+def test_values_outside_the_template_still_load(fake_vault: VaultData) -> None:
+    """Editing a game's template must never stop a vault from opening."""
+    gone = "00000000-0000-4000-8000-000000000000"
     raw = _dict(fake_vault)
-    raw["games"][0]["preset"] = "retired_preset"
+    raw["games"][0]["template"]["tiers"] = []
     raw["accounts"][0]["rank"] = {"tier": "Renamed Tier", "division": 9}
     raw["accounts"][0]["region"] = "Old Region"
-    assert s.vault_from_dict(raw).games[0].preset == "retired_preset"
+    raw["accounts"][0]["extra"] = {gone: "kept value"}
+    loaded = s.vault_from_dict(raw)
+    assert loaded.accounts[0].rank.tier == "Renamed Tier"
+    assert loaded.accounts[0].extra_value(gone) == "kept value"
 
 
 def test_newer_schema_refused(fake_vault: VaultData) -> None:
@@ -81,9 +85,13 @@ def test_migration_chain_runs_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_missing_migration_step_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(s, "SCHEMA_VERSION", 2)
+    monkeypatch.setattr(s, "SCHEMA_VERSION", SCHEMA_VERSION + 1)
     with pytest.raises(VaultFormatError, match="No migration"):
-        s.migrate({"schema_version": 1})
+        s.migrate({"schema_version": SCHEMA_VERSION})
+
+
+BAD_FIELD = {"id": "00000000-0000-4000-8000-000000000000", "label": "L",
+             "kind": "colour", "choices": []}
 
 
 def _mutations() -> list[tuple[str, Any]]:
@@ -109,6 +117,14 @@ def _mutations() -> list[tuple[str, Any]]:
         ("games not list", setv(["games"], {})),
         ("game extra key", setv(["games", 0, "x"], 1)),
         ("game bad id", setv(["games", 0, "id"], "nope")),
+        ("game missing template", drop(["games", 0, "template"])),
+        ("template extra key", setv(["games", 0, "template", "x"], 1)),
+        ("divisions too big", setv(["games", 0, "template", "tiers", 0, "divisions"], 9)),
+        ("divisions bool", setv(["games", 0, "template", "tiers", 0, "divisions"], True)),
+        ("hidden core field", setv(["games", 0, "template", "hidden_fields"], ["password"])),
+        ("bad field kind", setv(["games", 0, "template", "custom_fields"], [BAD_FIELD])),
+        ("extra not dict", setv(["accounts", 0, "extra"], [])),
+        ("extra value not str", setv(["accounts", 0, "extra"], {"a": 1})),
         ("account missing field", drop(["accounts", 0, "password"])),
         ("account unknown field", setv(["accounts", 0, "level"], 30)),
         ("password not str", setv(["accounts", 0, "password"], 123)),

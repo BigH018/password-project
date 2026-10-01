@@ -41,6 +41,9 @@ class AccountDialog(QDialog):
         self.duplicate_label = QLabel(self)
         self.duplicate_label.setStyleSheet(DUPLICATE_STYLE)
         self.duplicate_label.setWordWrap(True)
+        self.move_label = QLabel(self)
+        self.move_label.setStyleSheet(DUPLICATE_STYLE)
+        self.move_label.setWordWrap(True)
         self.error_label = QLabel(self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.error_label.setWordWrap(True)
@@ -54,6 +57,7 @@ class AccountDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(self.form)
         layout.addWidget(self.duplicate_label)
+        layout.addWidget(self.move_label)
         layout.addWidget(self.error_label)
         layout.addLayout(buttons)
 
@@ -77,6 +81,10 @@ class AccountDialog(QDialog):
     def _on_changed(self) -> None:
         self.error_label.clear()
         self._update_duplicates()
+        dropped = self.form.dropped_extra_count()
+        self.move_label.setText(
+            f"Moving to this game drops {dropped} extra field value(s) it doesn't have."
+            if dropped else "")
 
     def _update_duplicates(self) -> None:
         candidate = self._snapshot()

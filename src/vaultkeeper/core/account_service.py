@@ -1,7 +1,7 @@
 """Account CRUD and duplicate detection.
 
-Every change is validated against the account's game preset, saved immediately, and rolled
-back in memory if the save fails (see ``core/store.py``).
+Every change is validated against the account's game template, saved immediately, and
+rolled back in memory if the save fails (see ``core/store.py``).
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any
 
-from vaultkeeper.config.constants import get_preset
 from vaultkeeper.core.models import Account, Game, VaultData, new_id, utc_now_iso
 from vaultkeeper.core.store import VaultStore, apply_change
 from vaultkeeper.core.validation import validate_account
@@ -95,19 +94,24 @@ class AccountService:
         game = self._game(draft.game_id)
         now = self._clock()
         account = validate_account(replace(draft, created_at=now, updated_at=now),
-                                   get_preset(game.preset))
+                                   game.template)
         apply_change(self._store, lambda data: data.accounts.append(account))
         log.info("Account added id=%s game=%s", account.id, account.game_id)
         return account
 
     def update(self, edited: Account) -> Account:
-        """Validate and replace an existing account. Moving it to another game re-validates
-        it against that game's preset. ``created_at`` is preserved."""
+        """Validate and replace an existing account. ``created_at`` is preserved.
+
+        Values no longer in the game's template are kept if unchanged. Moving the account to
+        another game validates everything against that game's template.
+        """
         existing = self.get(edited.id)
         game = self._game(edited.game_id)
+        same_game = existing.game_id == edited.game_id
         account = validate_account(
             replace(edited, created_at=existing.created_at, updated_at=self._clock()),
-            get_preset(game.preset),
+            game.template,
+            previous=existing if same_game else None,
         )
 
         def change(data: VaultData) -> None:

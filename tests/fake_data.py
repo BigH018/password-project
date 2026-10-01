@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from vaultkeeper.core.game_template import starter_template
 from vaultkeeper.core.models import Account, Game, Rank, VaultData, new_id, utc_now_iso
 
 FAKE_PASSWORD = "Fake-Passw0rd-1!"
 
 
 def make_game(name: str = "Valorant", preset: str = "valorant") -> Game:
-    """Return a fake game."""
-    return Game(id=new_id(), name=name, preset=preset)
+    """Return a fake game whose template starts from ``preset`` ("custom"/"blank" = blank)."""
+    return Game(id=new_id(), name=name, template=starter_template(preset))
 
 
 def make_account(game: Game, n: int = 1, **overrides: Any) -> Account:

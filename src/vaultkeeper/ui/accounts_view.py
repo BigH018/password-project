@@ -17,7 +17,6 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-from vaultkeeper.config.constants import get_preset
 from vaultkeeper.core.account_service import AccountService
 from vaultkeeper.core.game_service import GameService
 from vaultkeeper.core.models import Account
@@ -115,7 +114,7 @@ class AccountsPanel(QWidget):
         if game_id is None:
             self.search.set_facets(facets(self._accounts.list_all()))
         else:
-            preset = get_preset(self._games.get(game_id).preset)
+            preset = self._games.get(game_id).rank_preset
             self.search.set_facets(facets(self._accounts.list_for_game(game_id), preset))
 
     def refresh_rows(self) -> None:
@@ -124,9 +123,11 @@ class AccountsPanel(QWidget):
             return
         game_id = self.sidebar.current_game_id()
         everything = self._accounts.list_all()
-        rows = filter_accounts(everything, self.search.build_filter(game_id))
         games = {g.id: g for g in self._games.list_games()}
-        self.model.set_rows(rows, games, show_game=game_id is None)
+        searchable = frozenset().union(*(g.template.searchable_field_ids for g in games.values()))
+        rows = filter_accounts(everything, self.search.build_filter(game_id), searchable)
+        self.model.set_rows(rows, games, show_game=game_id is None,
+                            single_game=games.get(game_id) if game_id else None)
         self.shown, self.total = len(rows), len(everything)
         self.selection_changed.emit()
 

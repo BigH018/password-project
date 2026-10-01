@@ -1,20 +1,16 @@
-"""Game management: add, rename, change preset, delete (blocked while accounts exist)."""
+"""Game management: add, rename, edit template, delete (blocked while accounts exist)."""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import replace
 
-from vaultkeeper.config.constants import DEFAULT_PRESET_KEY, get_preset
+from vaultkeeper.core.game_template import GameTemplate, starter_template
 from vaultkeeper.core.models import Game, VaultData, new_id
 from vaultkeeper.core.store import VaultStore, apply_change
-from vaultkeeper.core.validation import clean_game_name, clean_preset_key, validate_account
-from vaultkeeper.errors import (
-    DuplicateGameError,
-    GameInUseError,
-    NotFoundError,
-    ValidationError,
-)
+from vaultkeeper.core.template_validation import clean_template
+from vaultkeeper.core.validation import clean_game_name
+from vaultkeeper.errors import DuplicateGameError, GameInUseError, NotFoundError
 
 log = logging.getLogger(__name__)
 
@@ -63,9 +59,15 @@ class GameService:
 
         apply_change(self._store, change)
 
-    def add(self, name: str, preset: str = DEFAULT_PRESET_KEY) -> Game:
-        """Create a game. Names are unique, ignoring case."""
-        game = Game(id=new_id(), name=clean_game_name(name), preset=clean_preset_key(preset))
+    def add(self, name: str, template: GameTemplate | str | None = None) -> Game:
+        """Create a game. Names are unique, ignoring case.
+
+        ``template`` is a full template, a starter key ("valorant", "overwatch", "blank", ...)
+        or None for blank.
+        """
+        if not isinstance(template, GameTemplate):
+            template = starter_template(template or "blank")
+        game = Game(id=new_id(), name=clean_game_name(name), template=clean_template(template))
         self._ensure_unique(game.name)
         apply_change(self._store, lambda data: data.games.append(game))
         log.info("Game added id=%s", game.id)
@@ -81,26 +83,13 @@ class GameService:
         log.info("Game renamed id=%s", game_id)
         return updated
 
-    def set_preset(self, game_id: str, preset: str) -> Game:
-        """Change a game's preset, but only if every account still validates under it."""
+    def set_template(self, game_id: str, template: GameTemplate) -> Game:
+        """Replace a game's template. Never blocked: account values that no longer fit are
+        kept and shown as "not in this game's list"."""
         game = self.get(game_id)
-        new_preset = get_preset(clean_preset_key(preset))
-        failures = 0
-        for account in self._data.accounts:
-            if account.game_id == game_id:
-                try:
-                    validate_account(account, new_preset)
-                except ValidationError:
-                    failures += 1
-        if failures:
-            raise ValidationError(
-                "preset",
-                f"{_plural(failures)} would become invalid with this preset "
-                "(rank or region not in its lists); edit them first",
-            )
-        updated = replace(game, preset=new_preset.key)
+        updated = replace(game, template=clean_template(template))
         self._replace(updated)
-        log.info("Game preset changed id=%s", game_id)
+        log.info("Game template changed id=%s", game_id)
         return updated
 
     def delete(self, game_id: str) -> None:

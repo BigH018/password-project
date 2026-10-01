@@ -16,7 +16,14 @@ from pathlib import Path
 
 from vaultkeeper.core.account_service import AccountService
 from vaultkeeper.core.game_service import GameService
-from vaultkeeper.core.models import Rank
+from vaultkeeper.core.game_template import (
+    CustomField,
+    FieldKind,
+    GameTemplate,
+    TierDef,
+    starter_template,
+)
+from vaultkeeper.core.models import Rank, new_id
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.crypto.kdf import DEFAULT_KDF_PARAMS, KdfParams
 
@@ -36,10 +43,26 @@ _GAMES = (
     ("Overwatch", "overwatch", ("Europe", "Americas", "Asia"),
      (Rank("Silver", 5), Rank("Platinum", 3), Rank("Master", 1), Rank("Champion", 4),
       Rank("Top 500", None), Rank())),
-    ("Apex Legends", "custom", ("EU", "NA West"),
-     (Rank("Diamond IV", None), Rank("Predator", None), Rank())),
+    ("Apex Legends", "apex", ("EU", "NA West", "NA East"),
+     (Rank("Diamond", 4), Rank("Apex Predator", None), Rank())),
 )  # fmt: skip
-_COUNTS = {"valorant": 12, "marvel_rivals": 8, "overwatch": 7, "custom": 3}
+_COUNTS = {"valorant": 12, "marvel_rivals": 8, "overwatch": 7, "apex": 3}
+
+# A user-built template, the way someone would set up a game with no built-in preset.
+_LEGEND = CustomField(new_id(), "Main legend", FieldKind.CHOICE,
+                      ("Wraith", "Bloodhound", "Lifeline"))
+_LEVEL = CustomField(new_id(), "Account level", FieldKind.NUMBER)
+_BACKUP = CustomField(new_id(), "Backup code", FieldKind.SECRET)
+_APEX = GameTemplate(
+    tiers=(TierDef("Rookie", 4), TierDef("Bronze", 4), TierDef("Silver", 4), TierDef("Gold", 4),
+           TierDef("Platinum", 4), TierDef("Diamond", 4), TierDef("Master"),
+           TierDef("Apex Predator")),
+    best_division_is_one=True,
+    roman_divisions=True,
+    regions=("EU", "NA West", "NA East", "Asia"),
+    hidden_fields=frozenset({"tag"}),
+    custom_fields=(_LEGEND, _LEVEL, _BACKUP),
+)
 _STATUSES = ("active", "active", "active", "banned", "locked", "retired")
 
 
@@ -56,14 +79,14 @@ def _seed(service: VaultService) -> None:
     games, accounts = GameService(service), AccountService(service)
     number = 0
     for name, preset, regions, ranks in _GAMES:
-        game = games.add(name, preset)
+        game = games.add(name, _APEX if preset == "apex" else starter_template(preset))
         for i in range(_COUNTS[preset]):
             number += 1
             status = _STATUSES[number % len(_STATUSES)]
             accounts.add(replace(
                 accounts.new_draft(game.id),
                 display_name=f"DemoAlt{number:02d}",
-                tag="DEMO" if i % 3 else None,
+                tag="DEMO" if i % 3 and preset != "apex" else None,
                 login_username=f"demo_login_{number:02d}",
                 password=f"Fake-Demo-Pass-{number:02d}",
                 email=f"demo{number:02d}@example.test",
@@ -73,7 +96,14 @@ def _seed(service: VaultService) -> None:
                 tags=("demo", "main") if i == 0 else ("demo", "smurf"),
                 notes="Fake demo account. Banned in a pretend ranked game." if status == "banned"
                 else "Fake demo account.",
+                extra=_apex_extra(i) if preset == "apex" else (),
             ))
+
+
+def _apex_extra(i: int) -> tuple[tuple[str, str], ...]:
+    values = {_LEGEND.id: _LEGEND.choices[i % 3], _LEVEL.id: str(100 + 50 * i),
+              _BACKUP.id: f"FAKE-CODE-{i:04d}"}
+    return tuple(sorted(values.items()))
 
 
 def sweep_stale_demo_dirs(base: Path | None = None) -> None:

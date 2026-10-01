@@ -6,7 +6,7 @@ from typing import Any
 
 from PyQt5.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt
 
-from vaultkeeper.config.constants import get_preset
+from vaultkeeper.core.game_template import CustomField, FieldKind
 from vaultkeeper.core.models import Account, Game
 from vaultkeeper.core.search import rank_label, rank_sort_key
 
@@ -35,16 +35,33 @@ class AccountTableModel(QAbstractTableModel):
         self._rows: list[Account] = []
         self._games: dict[str, Game] = {}
         self._columns = COLUMNS
+        self._extra_fields: dict[str, CustomField] = {}
         self._show_passwords = False
 
     # --- data in ------------------------------------------------------------------------
 
-    def set_rows(self, accounts: list[Account], games: dict[str, Game], show_game: bool) -> None:
-        """Replace all rows. ``games`` maps game id to Game (for names and presets)."""
+    def set_rows(self, accounts: list[Account], games: dict[str, Game], show_game: bool,
+                 single_game: Game | None = None) -> None:
+        """Replace all rows. ``games`` maps game id to Game (names and templates).
+
+        With ``single_game`` (one game selected), columns follow its template: Rank/Region
+        columns hide if the game hides those fields, and non-secret extra fields get columns.
+        """
         self.beginResetModel()
         self._rows = list(accounts)
         self._games = dict(games)
-        self._columns = COLUMNS if show_game else tuple(c for c in COLUMNS if c[0] != "game")
+        columns = [c for c in COLUMNS if show_game or c[0] != "game"]
+        if single_game is not None:
+            template = single_game.template
+            columns = [c for c in columns
+                       if c[0] not in ("rank", "region") or template.shows(c[0])]
+            extras = [f for f in template.custom_fields if f.kind is not FieldKind.SECRET]
+            insert_at = [c[0] for c in columns].index("tags")
+            columns[insert_at:insert_at] = [(f"x:{f.id}", f.label) for f in extras]
+            self._extra_fields = {f.id: f for f in extras}
+        else:
+            self._extra_fields = {}
+        self._columns = tuple(columns)
         self.endResetModel()
 
     def clear(self) -> None:
@@ -76,6 +93,12 @@ class AccountTableModel(QAbstractTableModel):
 
     def _value(self, account: Account, key: str) -> str:
         game = self._games.get(account.game_id)
+        if key.startswith("x:"):
+            field_id = key[2:]
+            # Secret extra fields never get a column; this is a second guard.
+            if field_id not in self._extra_fields:
+                return ""
+            return account.extra_value(field_id)
         if key == "game":
             return game.name if game else ""
         if key == "name":
@@ -89,7 +112,7 @@ class AccountTableModel(QAbstractTableModel):
                 return ""
             return account.password if self._show_passwords else MASK
         if key == "rank":
-            return rank_label(account, get_preset(game.preset if game else ""))
+            return rank_label(account, game.rank_preset) if game else ""
         if key == "region":
             return account.region or ""
         if key == "status":
@@ -107,7 +130,7 @@ class AccountTableModel(QAbstractTableModel):
             return ""
         if key == "rank":
             game = self._games.get(account.game_id)
-            return rank_sort_key(account, get_preset(game.preset if game else ""))
+            return rank_sort_key(account, game.rank_preset) if game else (2, 0, 0, "")
         if key == "updated":
             return account.updated_at
         return self._value(account, key).casefold()

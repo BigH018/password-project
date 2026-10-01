@@ -16,7 +16,7 @@ from vaultkeeper.core.game_service import GameService
 from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui.account_dialog import AccountDialog
 from vaultkeeper.ui.accounts_view import AccountsPanel
-from vaultkeeper.ui.game_manager_dialog import GameManagerDialog
+from vaultkeeper.ui.game_setup_dialog import GameSetupDialog
 from vaultkeeper.ui.messages import confirm, error_text, show_error
 from vaultkeeper.ui.theme import MUTED_STYLE, WARNING_BANNER_STYLE
 
@@ -77,7 +77,7 @@ class MainWindow(QMainWindow):
         self.show_passwords_action.setCheckable(True)
         self.lock_action = action("&Lock", "Ctrl+L")
         self.change_password_action = action("Change master password...")
-        self.manage_games_action = action("Manage games...")
+        self.manage_games_action = action("Game setup...")
         self.quit_action = action("&Quit", "Ctrl+Q")
         # Delete key only acts while the table has focus (never while typing in a field).
         self.delete_action.setShortcutContext(Qt.WidgetWithChildrenShortcut)
@@ -184,7 +184,7 @@ class MainWindow(QMainWindow):
     def _manage_games(self) -> None:
         if self._games is None:
             return
-        dialog = GameManagerDialog(self._games, parent=self)
+        dialog = GameSetupDialog(self._games, parent=self)
         dialog.exec_()
         if dialog.changed:
             self._after_save()

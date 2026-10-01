@@ -11,9 +11,10 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from vaultkeeper.config.constants import DEFAULT_PRESET_KEY, DEFAULT_STATUS
+from vaultkeeper.config.constants import DEFAULT_STATUS, GamePreset
+from vaultkeeper.core.game_template import GameTemplate
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Fields holding secrets: masked in UI, auto-cleared from clipboard, never logged.
 SECRET_FIELDS: tuple[str, ...] = ("password", "email_password", "totp_secret")
@@ -44,11 +45,16 @@ class Rank:
 
 @dataclass(frozen=True, slots=True)
 class Game:
-    """A game that groups accounts. ``preset`` selects the rank ladder and regions."""
+    """A game that groups accounts. Its ``template`` defines ranks, regions and fields."""
 
     id: str
     name: str
-    preset: str = DEFAULT_PRESET_KEY
+    template: GameTemplate = field(default_factory=GameTemplate)
+
+    @property
+    def rank_preset(self) -> GamePreset:
+        """The template's ladder/regions in the shape the rank helpers use."""
+        return self.template.to_preset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +77,8 @@ class Account:
     totp_secret: str | None = field(default=None, repr=False)
     tags: tuple[str, ...] = field(default=(), repr=False)
     notes: str = field(default="", repr=False)
+    # Extra (per-game, user-defined) field values as sorted (field_id, value) pairs.
+    extra: tuple[tuple[str, str], ...] = field(default=(), repr=False)
     created_at: str = ""
     updated_at: str = ""
 
@@ -78,6 +86,10 @@ class Account:
         return f"Account(id={self.id!r}, game_id={self.game_id!r})"
 
     __str__ = __repr__
+
+    def extra_value(self, field_id: str) -> str:
+        """Value of an extra field ("" if unset)."""
+        return dict(self.extra).get(field_id, "")
 
     @property
     def riot_id(self) -> str:

@@ -191,3 +191,31 @@ def test_select_account_after_refresh(window: mw.MainWindow, unlocked: VaultServ
     assert window.panel.selected_account() is None
     assert window.panel.select_account(target.id)
     assert window.panel.selected_account() == target
+
+
+def test_custom_game_columns_follow_template(window: mw.MainWindow,
+                                             unlocked: VaultService) -> None:
+    """Demo's Apex: extra non-secret fields get columns; the secret field never does."""
+    window.panel.sidebar.select_game(_game_id(unlocked, "Apex Legends"))
+    model = window.panel.model
+    headers = [model.headerData(c, Qt.Horizontal) for c in range(model.columnCount())]
+    assert "Main legend" in headers and "Account level" in headers
+    assert "Backup code" not in headers
+    legends = _column_by_header(window, "Main legend")
+    assert set(legends) <= {"Wraith", "Bloodhound", "Lifeline"}
+    assert not any("FAKE-CODE" in str(model.data(model.index(r, c)))
+                   for r in range(model.rowCount()) for c in range(model.columnCount()))
+
+
+def test_search_finds_extra_fields_but_not_secret_ones(window: mw.MainWindow) -> None:
+    window.panel.search.text.setText("bloodhound")
+    assert window.panel.proxy.rowCount() >= 1
+    window.panel.search.text.setText("FAKE-CODE-0001")
+    assert window.panel.proxy.rowCount() == 0
+
+
+def _column_by_header(win: mw.MainWindow, header: str) -> list[str]:
+    model, proxy = win.panel.model, win.panel.proxy
+    col = next(c for c in range(model.columnCount())
+               if model.headerData(c, Qt.Horizontal) == header)
+    return [proxy.index(r, col).data() for r in range(proxy.rowCount())]

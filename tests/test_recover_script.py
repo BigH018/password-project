@@ -10,6 +10,7 @@ from pathlib import Path
 
 from conftest import MASTER
 from fake_data import make_account, make_game
+from vaultkeeper.core.models import SCHEMA_VERSION
 from vaultkeeper.core.vault_service import VaultService
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "recover_vault.py"
@@ -43,8 +44,9 @@ def test_script_decrypts_app_vault(make_service: Callable[..., VaultService],
     result = _run(vault_path, MASTER)
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout)
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == SCHEMA_VERSION
     assert payload["games"][0]["name"] == "Overwatch"
+    assert payload["games"][0]["template"]["tiers"][0] == {"name": "Bronze", "divisions": 5}
     assert payload["accounts"][0]["display_name"] == "Recover\u00e9"
     assert payload["accounts"][0]["password"] == svc.data.accounts[0].password
 
@@ -58,7 +60,7 @@ def test_script_non_ascii_master_password_nfc(make_service: Callable[..., VaultS
     for password in (composed, decomposed):
         result = _run(vault_path, password)
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout)["schema_version"] == 1
+        assert json.loads(result.stdout)["schema_version"] == SCHEMA_VERSION
 
 
 def test_script_wrong_password(make_service: Callable[..., VaultService],

@@ -7,7 +7,8 @@ import pytest
 from conftest import FakeStore
 from fake_data import make_account
 from vaultkeeper.core.game_service import GameService
-from vaultkeeper.core.models import Rank
+from vaultkeeper.core.game_template import CustomField, FieldKind, GameTemplate, TierDef
+from vaultkeeper.core.models import Rank, new_id
 from vaultkeeper.errors import (
     DuplicateGameError,
     GameInUseError,
@@ -27,7 +28,7 @@ def test_add_and_list_sorted(games: GameService, store: FakeStore) -> None:
     games.add("Apex Legends")
     games.add("Overwatch", "overwatch")
     assert [g.name for g in games.list_games()] == ["Apex Legends", "Overwatch", "valorant"]
-    assert games.list_games()[0].preset == "custom"
+    assert games.list_games()[0].template == GameTemplate()  # blank
     assert store.saves == 3
 
 
@@ -39,7 +40,7 @@ def test_add_trims_and_rejects_duplicates_case_insensitively(games: GameService)
 
 
 @pytest.mark.parametrize(("name", "preset"), [("", "custom"), ("x" * 65, "custom"),
-                                              ("Ok", "fortnite"), ("bad\x00name", "custom")])
+                                              ("bad\x00name", "custom")])
 def test_add_invalid(games: GameService, name: str, preset: str) -> None:
     with pytest.raises(ValidationError):
         games.add(name, preset)
@@ -80,30 +81,38 @@ def test_account_counts(games: GameService, store: FakeStore) -> None:
     assert games.account_counts() == {a.id: 1, b.id: 0}
 
 
-def test_set_preset_allowed_when_all_accounts_fit(games: GameService, store: FakeStore) -> None:
-    game = games.add("Rivals")  # custom
-    store.data.accounts.append(make_account(game, region="EU", rank=Rank("Gold", None)))
-    updated = games.set_preset(game.id, "marvel_rivals")
-    assert updated.preset == "marvel_rivals"
-
-
-def test_set_preset_blocked_with_failure_count(games: GameService, store: FakeStore) -> None:
+def test_set_template_never_blocked_and_keeps_account_data(games: GameService,
+                                                          store: FakeStore) -> None:
     game = games.add("Valorant", "valorant")
-    store.data.accounts.extend([
-        make_account(game, n=1, region="EU", rank=Rank("Ascendant", 2)),  # no Ascendant in OW
-        make_account(game, n=2, region="EU", rank=Rank("Gold", 2)),       # EU not an OW region
-        make_account(game, n=3, region=None, rank=Rank("Gold", 2)),       # fits Overwatch
-    ])
-    with pytest.raises(ValidationError, match="2 accounts would become invalid"):
-        games.set_preset(game.id, "overwatch")
-    assert games.get(game.id).preset == "valorant"
+    account = make_account(game, region="EU", rank=Rank("Ascendant", 2))
+    store.data.accounts.append(account)
+    smaller = GameTemplate(tiers=(TierDef("Gold", 3),), regions=("NA",))
+    updated = games.set_template(game.id, smaller)
+    assert updated.template.tiers == (TierDef("Gold", 3),)
+    assert store.data.accounts == [account]  # nothing deleted or rewritten
 
 
-def test_set_preset_singular_message(games: GameService, store: FakeStore) -> None:
-    game = games.add("Valorant", "valorant")
-    store.data.accounts.append(make_account(game, rank=Rank("Radiant", None)))
-    with pytest.raises(ValidationError, match="1 account would"):
-        games.set_preset(game.id, "overwatch")
+def test_set_template_validates(games: GameService) -> None:
+    game = games.add("Fortnite")
+    for bad in (
+        GameTemplate(tiers=(TierDef("Gold"), TierDef("gold"))),  # duplicate rank
+        GameTemplate(tiers=(TierDef(""),)),                        # empty name
+        GameTemplate(tiers=(TierDef("Gold", 6),)),                 # too many divisions
+        GameTemplate(regions=("EU", "eu")),
+        GameTemplate(custom_fields=(CustomField(new_id(), "Level", FieldKind.CHOICE),)),
+        GameTemplate(hidden_fields=frozenset({"password"})),       # can't hide a core field
+    ):
+        with pytest.raises(ValidationError):
+            games.set_template(game.id, bad)
+    assert games.get(game.id).template == GameTemplate()
+
+
+def test_add_with_starter_or_template(games: GameService) -> None:
+    ow = games.add("Overwatch", "overwatch")
+    assert ow.template.tiers[0] == TierDef("Bronze", 5) and ow.template.best_division_is_one
+    custom = games.add("Fortnite", GameTemplate(tiers=(TierDef("Bronze", 3), TierDef("Unreal"))))
+    assert [t.name for t in custom.template.tiers] == ["Bronze", "Unreal"]
+    assert games.add("Blank").template == GameTemplate()
 
 
 def test_failed_save_rolls_back(games: GameService, store: FakeStore) -> None:

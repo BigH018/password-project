@@ -34,10 +34,11 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 |---|---|---|
 | Crypto, KDF, vault format | docs/VAULT_FORMAT.md, crypto/*, storage/vault_file.py, errors.py | scripts/recover_vault.py (must stay in sync with the format); tests/test_header, test_kdf, test_cipher, test_envelope, test_vault_file, test_recover_script |
 | Vault lifecycle (create, unlock, lock, change password) | core/vault_service.py, core/tasks.py, core/password_policy.py, errors.py, core/serialization.py | crypto/ signatures, storage/vault_file.py signatures, tests/test_vault_service.py, test_password_policy.py |
-| Accounts, games, search, duplicates | docs/DATA_MODEL.md, core/models.py, the relevant service (account_service, game_service or search), core/store.py, core/validation.py | core/text_validation.py, matching test file, tests/conftest.py (FakeStore) |
-| Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/serialization.py, config/constants.py, tests/test_serialization.py | grep ui/ for the field to see where it is displayed |
+| Accounts, games, search, duplicates | docs/DATA_MODEL.md, core/models.py, core/game_template.py, the relevant service (account_service, game_service or search), core/store.py, core/validation.py | core/text_validation.py, matching test file, tests/conftest.py (FakeStore) |
+| Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/game_template.py, core/serialization.py, core/template_codec.py, core/migrations.py, tests/test_serialization.py, tests/test_migrations.py | grep ui/ for the field to see where it is displayed |
 | A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/theme.py, and signatures of the services it calls (main window: also ui/accounts_view.py) | ui/app_controller.py (screen flow), ui/qt_adapters.py, tests/ui_support.py, matching tests/ui file |
 | App startup, demo mode | app.py, demo.py, ui/app_controller.py | config/settings.py, config/logging_setup.py, tests/test_demo.py |
+| Game templates, Game setup | docs/DATA_MODEL.md, core/game_template.py, core/template_validation.py, ui/game_setup_dialog.py | ui/widgets/ladder_editor.py, extra_fields_editor.py, account_form.py, tests/test_templates.py, tests/ui/test_game_setup.py |
 | Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures, core/validation.py signatures | tests/test_paste_assist.py, test_entry_session.py |
 | Clipboard, auto-lock, session lock | security/*, ui/qt_adapters.py | tests/test_clipboard.py, test_autolock.py |
 | Backups, export | core/backup.py, core/exporter.py, storage/vault_file.py | docs/VAULT_FORMAT.md |
@@ -136,8 +137,12 @@ vaultkeeper/                       repo root
       paths.py                     app-data dir and default file locations
       logging_setup.py             logging config + redaction filter (defense in depth)
     core/
-      models.py                    dataclasses: Account, Game, Rank, VaultData (no I/O)
-      serialization.py             VaultData <-> JSON dict, schema validation, migrations
+      models.py                    dataclasses: Account (+ extra values), Game (+ template), Rank, VaultData
+      game_template.py             GameTemplate/TierDef/CustomField, starters from presets
+      template_codec.py            GameTemplate <-> JSON dict (strict structure checks)
+      template_validation.py       clean_template (Game setup) + clean_extra (extra field values)
+      migrations.py                migrate_v1_to_v2 (preset key -> template, accounts get extra)
+      serialization.py             VaultData <-> JSON dict, structure validation, runs migrations
       text_validation.py           generic text/secret/email/URL/uuid checks (clean_* helpers)
       validation.py                field rules (names, tags, labels, presets, ranks, TOTP) + validate_account
       store.py                     VaultStore protocol + apply_change (save or roll back in memory)
@@ -145,7 +150,7 @@ vaultkeeper/                       repo root
       tasks.py                     TaskRunner protocol + InlineTaskRunner
       vault_service.py             create/unlock/lock/save/change password; backup-safe save after .bak
       account_service.py           account CRUD + duplicate detection (warning only)
-      game_service.py              add/rename/set preset/delete games (blocked if accounts exist)
+      game_service.py              add (starter/template) / rename / set_template (never blocked) / delete
       search.py                    AccountFilter, free-text search (never secrets), facets, rank sort key
       backup.py               (P)  rotating encrypted backups + "backup now"
       exporter.py             (P)  encrypted export with its own password
@@ -176,16 +181,18 @@ vaultkeeper/                       repo root
       change_password_dialog.py    change master password (KDF off-thread, closable while busy)
       account_dialog.py            add/edit: AccountForm + live duplicate warning + unsaved-changes
                                    prompt (force_close() skips it on lock)
-      game_manager_dialog.py       add / rename / change preset / delete games (errors show counts)
+      game_setup_dialog.py         Game setup: list + editor (starter, ranks, regions, fields, extras)
       quick_add_dialog.py     (P)  keyboard-first batch entry + paste box + duplicate warning
       settings_dialog.py      (P)  timeouts, backup folder, keep-N, columns
       generator_dialog.py     (P)  password generator UI
       messages.py                  generic error texts (error_text) + confirm/error boxes
       widgets/
-        account_table.py           table model (passwords masked) + proxy sorting by ladder
+        account_table.py           table model (passwords masked, extra columns, never secret) + proxy
         game_sidebar.py            "All games" + games with counts
         search_bar.py              free text + status/rank/region/label dropdowns -> AccountFilter
-        account_form.py            all account fields in keyboard order; load()/to_account()
+        account_form.py            form built from the game template (hidden fields, extra fields)
+        ladder_editor.py           rank list editor: tiers + divisions, order, division style
+        extra_fields_editor.py     extra fields editor: label, type, dropdown options (ids kept)
         rank_picker.py             RankPicker (tier + division) and RegionPicker, preset-driven;
                                    free text for custom games; legacy values shown, never dropped
         secret_field.py            masked edit with show/hide (copy button in Phase 5)
@@ -210,12 +217,14 @@ vaultkeeper/                       repo root
     test_vault_service.py, test_password_policy.py, test_recover_script.py
     test_accounts.py, test_games.py, test_search.py
     test_demo.py                   demo stays in temp, fake data only, cleaned up (even with open logs)
+    test_templates.py              templates: presets, codec, validation, extra values, secret search
+    test_migrations.py             schema v1 -> v2 (incl. a real encrypted v1 vault)
     test_backup.py, test_exporter.py, test_clipboard.py, test_autolock.py              (P)
     test_generator.py, test_entry_session.py, test_paste_assist.py, test_totp.py      (P)
     ui/                            pytest-qt: test_qt_adapters, test_unlock_dialog (never-silent
                                    backup, no freeze, closable while busy), test_create_vault_dialog,
                                    test_change_password_dialog, test_main_window (real demo vault),
-                                   test_account_dialog, test_game_manager, test_pickers,
+                                   test_account_dialog, test_game_setup, test_pickers,
                                    test_shell (welcome, controller lock/demo details)
 ```
 
@@ -282,8 +291,9 @@ t=4, m=512 MiB, p=4 (about 0.3 s on the dev PC; target under ~1 s on a modest PC
 
 ## 8. Data model (summary → `docs/DATA_MODEL.md`)
 `Account` (game-linked by `game_id`, name + optional tag, login, secrets, email fields, region,
-two-part rank, status, tags, notes, timestamps) and `Game` (name + preset that defines rank
-ladder and regions). Duplicate check is a warning only: same game and the same login or name#tag.
+two-part rank, status, tags, notes, extra field values, timestamps) and `Game` (name + its own
+editable template: ranks, regions, shown fields, extra fields). Editing a template never deletes
+account data. Duplicate check is a warning only: same game and the same login or name#tag.
 
 ---
 
@@ -406,6 +416,10 @@ python -m vaultkeeper  # run the app
 - Account dialog: rank/region are preset dropdowns (free text for custom games). A stored
   value not in the preset is shown marked "(not in this game's list)" rather than dropped.
   After saving, the edited/new row stays selected.
+- Per-game templates (4d): every game, built-ins included, has editable ranks (tiers + 0-5
+  divisions), regions, shown standard fields and extra fields (text/number/dropdown/secret).
+  Template edits are never blocked and never delete data (kept values marked "not in this
+  game's list"). This replaced "block a preset change if accounts become invalid".
 - No silent default game: adding from "All games" starts on "Choose a game..." (rank and
   region disabled until chosen); a selected sidebar game is pre-filled.
 - UI tests stub `messages.confirm`/`show_error` by default (`tests/ui_support.py`): a real
@@ -425,6 +439,7 @@ python -m vaultkeeper  # run the app
   - [x] 4a: foundation, welcome, create, unlock (+ backup offer/banner), task runner, shell, --demo
   - [x] 4b: full main window (sidebar, search, table, lock, change master password)
   - [x] 4c: account dialog, game manager
+  - [x] 4d: per-game templates (custom ranks/regions/fields/extra fields), Game setup, schema v2
 - [ ] Phase 5: Clipboard, auto-lock, generator, export, backups
 - [ ] Phase 6: Quick Add, batch mode, paste assist
 - [ ] Phase 7: TOTP

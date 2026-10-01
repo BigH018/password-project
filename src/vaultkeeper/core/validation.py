@@ -12,7 +12,9 @@ from dataclasses import replace
 from typing import Any
 
 from vaultkeeper.config import constants as c
+from vaultkeeper.core.game_template import GameTemplate, template_from_preset
 from vaultkeeper.core.models import Account, Rank
+from vaultkeeper.core.template_validation import clean_extra
 from vaultkeeper.core.text_validation import (
     check_length,
     clean_email,
@@ -90,21 +92,29 @@ def clean_status(value: Any) -> str:
     return str(value)
 
 
-def clean_region(value: Any, preset: c.GamePreset) -> str | None:
-    """Region must be in the preset's region list (any text for free-text presets)."""
+def clean_region(value: Any, preset: c.GamePreset, previous: str | None = None) -> str | None:
+    """Region must be in the game's region list (any text for free-text presets).
+
+    A value no longer in the list is accepted if unchanged from ``previous`` (kept data).
+    """
     text = clean_optional_text(value, "region", c.MAX_REGION)
+    if text is not None and text == previous:
+        return text
     if text is not None and not preset.free_text and text not in preset.regions:
         raise ValidationError("region", "is not a region for this game")
     return text
 
 
-def clean_rank(rank: Any, preset: c.GamePreset) -> Rank:
-    """Tier must exist in the preset. Division is optional but, if given, must be in range.
+def clean_rank(rank: Any, preset: c.GamePreset, previous: Rank | None = None) -> Rank:
+    """Tier must exist in the ladder. Division is optional but, if given, must be in range.
 
-    Free-text presets accept any tier text and no division.
+    Free-text presets accept any tier text and no division. A rank no longer in the ladder
+    is accepted if unchanged from ``previous`` (kept data).
     """
     if not isinstance(rank, Rank):
         raise ValidationError("rank", "is not a rank")
+    if previous is not None and rank == previous:
+        return rank
     if preset.free_text:
         if rank.division is not None:
             raise ValidationError("rank", "free-text ranks have no division")
@@ -151,11 +161,23 @@ def clean_preset_key(value: Any) -> str:
 # --- Whole account ----------------------------------------------------------------------------
 
 
-def validate_account(account: Account, preset: c.GamePreset) -> Account:
+def validate_account(
+    account: Account,
+    template: GameTemplate | c.GamePreset,
+    previous: Account | None = None,
+) -> Account:
     """Return a normalized copy of ``account`` or raise ``ValidationError``.
 
+    ``template`` is the game's template (a built-in preset is accepted and converted).
+    ``previous`` is the stored version of the same account in the same game: values that
+    are no longer in the template are allowed only if unchanged from it.
     An account needs at least one identifier: login username, in-game name or email.
     """
+    if isinstance(template, c.GamePreset):
+        preset = template
+        template = GameTemplate() if template.free_text else template_from_preset(template)
+    else:
+        preset = template.to_preset()
     cleaned = replace(
         account,
         id=clean_uuid(account.id, "id"),
@@ -167,13 +189,14 @@ def validate_account(account: Account, preset: c.GamePreset) -> Account:
         email=clean_email(account.email, "email"),
         email_password=clean_optional_secret(account.email_password, "email_password"),
         email_login_url=clean_url(account.email_login_url, "email_login_url"),
-        region=clean_region(account.region, preset),
-        rank=clean_rank(account.rank, preset),
+        region=clean_region(account.region, preset, previous.region if previous else None),
+        rank=clean_rank(account.rank, preset, previous.rank if previous else None),
         status=clean_status(account.status),
         recovery_email=clean_optional_email(account.recovery_email, "recovery_email"),
         totp_secret=clean_totp_secret(account.totp_secret),
         tags=clean_labels(account.tags),
         notes=clean_text(account.notes, "notes", c.MAX_NOTES, multiline=True),
+        extra=clean_extra(account.extra, template, previous.extra if previous else ()),
     )
     if not (cleaned.login_username or cleaned.display_name or cleaned.email):
         raise ValidationError("account", "needs a login username, in-game name or email")

@@ -183,3 +183,95 @@ def test_game_preselected_when_viewing_a_game(qtbot: Any, accounts: AccountServi
     dialog = _open(qtbot, accounts, games, default_game_id=games[1].id)
     assert dialog.form.game.currentData() == games[1].id
     assert dialog.form.game.findData(None) == -1  # no placeholder needed
+
+
+# --- template-driven form ----------------------------------------------------------------
+
+
+@pytest.fixture
+def fortnite(store: FakeStore) -> Game:
+    from vaultkeeper.core.game_template import (
+        CustomField,
+        FieldKind,
+        GameTemplate,
+        TierDef,
+    )
+    from vaultkeeper.core.models import new_id
+
+    template = GameTemplate(
+        tiers=(TierDef("Bronze", 3), TierDef("Unreal")), roman_divisions=True,
+        regions=("EU",), hidden_fields=frozenset({"tag", "recovery_email"}),
+        custom_fields=(CustomField(new_id(), "Level", FieldKind.NUMBER),
+                       CustomField(new_id(), "Platform", FieldKind.CHOICE, ("PC", "PS5")),
+                       CustomField(new_id(), "Backup code", FieldKind.SECRET)),
+    )
+    game = Game(id=new_id(), name="Fortnite", template=template)
+    store.data.games.append(game)
+    return game
+
+
+def test_form_follows_game_template(qtbot: Any, accounts: AccountService, games: list[Game],
+                                    fortnite: Game) -> None:
+    dialog = _open(qtbot, accounts, [*games, fortnite], default_game_id=fortnite.id)
+    form = dialog.form
+    assert form.tag.isHidden() and form.recovery_email.isHidden()
+    assert not form.region.isHidden() and not form.rank.isHidden()
+    assert [form.rank.tier.itemText(i) for i in range(form.rank.tier.count())] == [
+        "Unranked", "Bronze", "Unreal"]
+    level, platform, code = (form.extra_widget(f.id) for f in fortnite.template.custom_fields)
+    assert isinstance(code, SecretField) and not code.revealed
+    form.display_name.setText("FakeFn")
+    form.login.setText("fake_fn_login")
+    form.rank.set_rank(Rank("Bronze", 3))
+    level.setText("88")
+    platform.setCurrentIndex(platform.findData("PS5"))
+    code.setText("FAKE-BACKUP-1")
+    dialog.save_button.click()
+    saved = accounts.get(dialog.saved.id)  # type: ignore[union-attr]
+    ids = [f.id for f in fortnite.template.custom_fields]
+    assert dict(saved.extra) == {ids[0]: "88", ids[1]: "PS5", ids[2]: "FAKE-BACKUP-1"}
+    assert saved.rank == Rank("Bronze", 3)
+
+
+def test_bad_number_rejected_with_field_label(qtbot: Any, accounts: AccountService,
+                                              fortnite: Game) -> None:
+    dialog = _open(qtbot, accounts, [fortnite], default_game_id=fortnite.id)
+    dialog.form.login.setText("fake_fn_login")
+    dialog.form.extra_widget(fortnite.template.custom_fields[0].id).setText("lots")
+    dialog.save_button.click()
+    assert dialog.error_label.text() == "Level must be a number."
+
+
+def test_kept_values_survive_editing(qtbot: Any, accounts: AccountService, fortnite: Game,
+                                     store: FakeStore) -> None:
+    gone = "00000000-0000-4000-8000-000000000000"
+    platform = fortnite.template.custom_fields[1].id
+    from fake_data import make_account
+
+    old = make_account(fortnite, tag=None, region="Old Region", rank=Rank("Champion", None),
+                       extra=((gone, "kept"), (platform, "Switch")))
+    store.data.accounts.append(old)
+    dialog = _open(qtbot, accounts, [fortnite], account=old)
+    assert "not in this game's list" in dialog.form.rank.tier.currentText()
+    box = dialog.form.extra_widget(platform)
+    assert box.currentText() == "Switch (not in this game's list)"
+    dialog.form.notes.setPlainText("edited notes only")
+    dialog.save_button.click()
+    assert dialog.result() == QDialog.Accepted
+    saved = accounts.get(old.id)
+    assert saved.rank == Rank("Champion", None) and saved.region == "Old Region"
+    assert dict(saved.extra) == {gone: "kept", platform: "Switch"}
+
+
+def test_moving_game_warns_about_dropped_extras(qtbot: Any, accounts: AccountService,
+                                                games: list[Game], fortnite: Game,
+                                                store: FakeStore) -> None:
+    from fake_data import make_account
+
+    level = fortnite.template.custom_fields[0].id
+    acc = make_account(fortnite, tag=None, region="EU", rank=Rank(), extra=((level, "5"),))
+    store.data.accounts.append(acc)
+    dialog = _open(qtbot, accounts, [*games, fortnite], account=acc)
+    assert dialog.move_label.text() == ""
+    dialog.form.game.setCurrentIndex(dialog.form.game.findData(games[0].id))
+    assert "drops 1 extra field value" in dialog.move_label.text()

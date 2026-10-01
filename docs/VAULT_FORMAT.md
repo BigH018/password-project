@@ -70,14 +70,20 @@ Violations raise `VaultFormatError`. That's safe to report, because it reveals n
 UTF-8 JSON:
 ```json
 {
-  "schema_version": 1,
-  "games":    [{"id": "uuid", "name": "Valorant", "preset": "valorant"}],
-  "accounts": [{"id": "uuid", "game_id": "uuid", "...": "see DATA_MODEL.md"}],
+  "schema_version": 2,
+  "games":    [{"id": "uuid", "name": "Valorant", "template": {
+                  "tiers": [{"name": "Iron", "divisions": 3}],
+                  "best_division_is_one": false, "roman_divisions": false,
+                  "regions": ["NA", "EU"], "hidden_fields": [], "custom_fields": [
+                    {"id": "uuid", "label": "Level", "kind": "number", "choices": []}]}}],
+  "accounts": [{"id": "uuid", "game_id": "uuid", "extra": {"<field id>": "42"},
+                "...": "see DATA_MODEL.md"}],
   "meta":     {"created_at": "ISO-8601 UTC", "updated_at": "ISO-8601 UTC"}
 }
 ```
 `format_version` covers the binary layout, and `schema_version` covers the JSON. Readers refuse
-newer versions. Migrations live in `core/serialization.py` as `migrate_vN_to_vN+1`, each with tests.
+newer versions. Migrations live in `core/migrations.py` as `migrate_vN_to_vN+1`, each with tests
+(`tests/test_migrations.py`, which includes opening a real encrypted v1 vault).
 
 ## KDF defaults and rationale
 

@@ -1,8 +1,9 @@
 """Filtering and rank ordering for the account list. Pure functions, no state.
 
 Free-text search covers identifying and descriptive fields: name, tag, Riot ID, login,
-emails, labels, notes, region, status and rank. It NEVER looks at secrets (password, email
-password, TOTP secret).
+emails, labels, notes, region, status, rank, and extra fields the caller marks searchable.
+It NEVER looks at secrets (password, email password, TOTP secret, secret extra fields):
+extra fields are excluded unless their id is passed in ``searchable_ids``.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ class AccountFilter:
                     or self.text.strip())
 
 
-def searchable_text(account: Account) -> str:
+def searchable_text(account: Account, searchable_ids: frozenset[str] = frozenset()) -> str:
     """Case-folded text that free-text search runs against (never includes secrets)."""
     parts = [
         account.display_name, account.tag or "", account.riot_id, account.login_username,
@@ -49,11 +50,13 @@ def searchable_text(account: Account) -> str:
         account.status, account.rank.tier or "unranked",
         str(account.rank.division) if account.rank.division is not None else "",
         *account.tags,
+        *(value for field_id, value in account.extra if field_id in searchable_ids),
     ]  # fmt: skip
     return "\n".join(parts).casefold()
 
 
-def matches(account: Account, flt: AccountFilter) -> bool:
+def matches(account: Account, flt: AccountFilter,
+            searchable_ids: frozenset[str] = frozenset()) -> bool:
     """Whether ``account`` satisfies every criterion in ``flt``."""
     if flt.game_id is not None and account.game_id != flt.game_id:
         return False
@@ -69,15 +72,17 @@ def matches(account: Account, flt: AccountFilter) -> bool:
             return False
     words = flt.text.casefold().split()
     if words:
-        haystack = searchable_text(account)
+        haystack = searchable_text(account, searchable_ids)
         if not all(w in haystack for w in words):
             return False
     return True
 
 
-def filter_accounts(accounts: Iterable[Account], flt: AccountFilter) -> list[Account]:
-    """Accounts matching ``flt``, in their original order."""
-    return [a for a in accounts if matches(a, flt)]
+def filter_accounts(accounts: Iterable[Account], flt: AccountFilter,
+                    searchable_ids: frozenset[str] = frozenset()) -> list[Account]:
+    """Accounts matching ``flt``, in their original order. ``searchable_ids`` lists the
+    non-secret extra fields free text may search."""
+    return [a for a in accounts if matches(a, flt, searchable_ids)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,20 +98,23 @@ def facets(accounts: Iterable[Account], preset: GamePreset | None = None) -> Fac
     """Values to offer in the filter dropdowns.
 
     With a fixed-ladder ``preset`` (one game selected), tiers and regions come from the
-    preset in ladder order. Otherwise they are the distinct values present, sorted. Tags are
-    always the labels present (case-insensitively distinct, first spelling kept).
+    preset in ladder order, followed by any kept values no longer in it. Otherwise they are
+    the distinct values present, sorted. Tags are always the labels present
+    (case-insensitively distinct, first spelling kept).
     """
     accounts = list(accounts)
     tags: dict[str, str] = {}
     for account in accounts:
         for tag in account.tags:
             tags.setdefault(tag.casefold(), tag)
+    present_tiers = sorted({a.rank.tier for a in accounts if a.rank.tier}, key=str.casefold)
+    present_regions = sorted({a.region for a in accounts if a.region}, key=str.casefold)
     if preset is not None and not preset.free_text:
-        tiers, regions = preset.tier_names, preset.regions
+        tiers = (*preset.tier_names, *(t for t in present_tiers if t not in preset.tier_names))
+        regions = (*preset.regions, *(r for r in present_regions if r not in preset.regions))
     else:
-        tiers = tuple(sorted({a.rank.tier for a in accounts if a.rank.tier}, key=str.casefold))
-        regions = tuple(sorted({a.region for a in accounts if a.region}, key=str.casefold))
-    return Facets(tiers, regions, tuple(sorted(tags.values(), key=str.casefold)))
+        tiers, regions = tuple(present_tiers), tuple(present_regions)
+    return Facets(tuple(tiers), tuple(regions), tuple(sorted(tags.values(), key=str.casefold)))
 
 
 def rank_sort_key(account: Account, preset: GamePreset) -> tuple[int, int, int, str]:
