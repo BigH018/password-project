@@ -15,7 +15,8 @@ from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.crypto.kdf import KdfParams
 from vaultkeeper.errors import VaultIOError
 
-pytest_plugins = ["ui_support"]  # Qt fixtures for tests/ui (off-screen)
+# Qt fixtures for tests/ui (off-screen), plus the fixtures shared by split test files.
+pytest_plugins = ["ui_support", "backup_helpers", "vault_file_helpers"]
 
 
 class NetworkBlockedError(RuntimeError):

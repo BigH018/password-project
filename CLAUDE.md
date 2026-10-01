@@ -258,7 +258,10 @@ vaultkeeper/                       repo root
       assets/
         app_icon.ico               16-256px icon built from icon_source_32px.ico (package data)
   tests/
-    conftest.py                    fast KDF params, network block (autouse), FakeStore, fixtures
+    conftest.py                    fast KDF params, network block (autouse), FakeStore, fixtures;
+                                   registers ui_support, backup_helpers, vault_file_helpers
+    *_helpers.py                   shared helpers/fixtures of split test files (no tests):
+                                   vault_service_helpers, vault_file_helpers, backup_helpers
     ui_support.py                  pytest plugin: off-screen Qt, QtTaskRunner, Gate (blocking KDF),
                                    SessionGuard shutdown + gc after each test, default stubs for
                                    messages.confirm/show_error/show_warning
@@ -277,21 +280,28 @@ vaultkeeper/                       repo root
     test_settings.py               load/save, defaults, corrupt file handling, paths, geometry,
                                    SettingsFile
     test_logging_setup.py          redaction, exceptions logged without messages, on_error notice
-    test_header.py, test_kdf.py, test_cipher.py, test_envelope.py, test_vault_file.py
-    test_vault_service.py, test_password_policy.py, test_recover_script.py
+    test_header.py, test_kdf.py, test_cipher.py, test_envelope.py
+    test_vault_file.py             atomic save, .bak, quarantine; test_vault_file_safety.py:
+                                   exclusive temp files, shared folder, directory sync
+    test_vault_service.py          create/unlock/crypto/lock/async; _saving.py: .bak, damaged
+                                   files, failed saves; _password.py: password change
+    test_password_policy.py, test_recover_script.py
     test_vault_disk.py             save refused if the file changed on disk (second instance)
     test_accounts.py, test_games.py, test_search.py
     test_demo.py                   demo stays in temp, fake data only, cleaned up (even with open logs)
     test_templates.py              templates: presets, codec, validation, extra values, secret search
     test_migrations.py             schema v1 -> v2 (incl. a real encrypted v1 vault)
-    test_backup.py, test_exporter.py, test_clipboard.py, test_autolock.py, test_generator.py
+    test_backup.py                 copies, rotation, paths; test_backup_status.py: failures,
+                                   password-change helpers, prepare/run/finish
+    test_exporter.py, test_clipboard.py, test_autolock.py, test_generator.py
     test_entry_session.py, test_paste_assist.py
     ui/                            pytest-qt: test_qt_adapters, test_unlock_dialog (never-silent
                                    backup, no freeze, closable while busy), test_create_vault_dialog,
                                    test_change_password_dialog, test_main_window (real demo vault),
                                    test_account_dialog, test_game_setup, test_pickers (+ game switching),
                                    test_shell (welcome, controller lock/demo details),
-                                   test_phase5_ui (copy, auto-lock, generator, backups, export),
+                                   test_phase5_ui (copy, auto-lock, generator, backups-off banner),
+                                   test_backup_export_ui (Backups/export dialogs, lock path),
                                    test_backup_async (slow folder: no freeze, lock, queue, quit),
                                    test_backup_ui (backups after a password change, failure
                                    banner until a backup works, last successful backup),
@@ -732,10 +742,12 @@ Group 6 (in progress): cleanup (one commit each)
 - [x] 27 make `_BIDI_CONTROLS` public (now `BIDI_CONTROLS`), update importers
 - [x] 28 Quick Add opens on the sidebar's selected game, else the last batch game
 - [x] 29 cache the template-to-preset conversion in account_table.py
-- [ ] 30 split tests/test_vault_service.py and tests/ui/test_phase5_ui.py under ~300 lines;
+- [x] 30 split tests/test_vault_service.py and tests/ui/test_phase5_ui.py under ~300 lines;
       also split `ui/app_controller.py` (394 lines: move backup/export wiring out),
       `core/backup.py` (306: e.g. old-password helpers out) and
       `core/vault_service.py` (319); flag `ui/main_window.py` (~300)
+      DONE for tests (also test_vault_file.py and test_backup.py; every test file < 300,
+      all 1394 test IDs still collected). Source splits: see the note below.
 - [ ] 31 move the §13 decision log to docs/DECISIONS.md with a pointer; add known/deferred:
       SEC-M4 (Qt 5.15.2 CVEs, plan PyQt6) and SEC-Low9 (log tracebacks contain full paths);
       README note that log files shouldn't be shared
