@@ -157,7 +157,8 @@ vaultkeeper/                       repo root
       validation.py                field rules (names, tags, labels, presets, ranks, TOTP) + validate_account;
                                    split_name_and_tag (name#tag typed in the name, tag empty)
       store.py                     VaultStore protocol + apply_change (save or roll back in memory)
-      password_policy.py           master password rules (min 12) + strength hint
+      password_policy.py           master password rules (min 12, measured without padding or
+                                   invisible characters) + strength hint
       tasks.py                     TaskRunner protocol + InlineTaskRunner
       vault_service.py             create/unlock/lock/save/change password; backup-safe save after
                                    .bak; on_saved listeners (backups)
@@ -488,6 +489,8 @@ python -m vaultkeeper  # run the app
 - `pyproject.toml` reads dependencies from `requirements.txt` (single source of pins).
 - The master password is NFC-normalized before the KDF (the app and the recovery script agree).
 - Master password policy: ≥12 chars, ≥5 distinct chars, not on a small common-password list.
+  Measured after NFC without Unicode Cf characters and surrounding whitespace (SEC-Low1);
+  the key still uses the password exactly as typed (NFC only). Never checked at unlock.
 - Every service change saves immediately and rolls back in memory if the save fails.
 - Free-text search covers notes but never secrets. Tag filters require ALL selected labels.
 - Phase 4 backup UX: show "Try the backup copy" only when a `.bak` exists, worded as "only if
@@ -620,7 +623,7 @@ Group 2 (done, pushed with this CLAUDE.md update):
 - [x] 8 SEC-M2 instance lock (`VaultInstanceLock`, QLockFile) + save refused if the file
       changed on disk (`core/vault_disk.py`, VaultConflictError)
 
-Group 3 (done): entry workflow and lock rule
+Group 3 (done, pushed): entry workflow and lock rule
 - [x] 9 CR-M2 switching game on the account form resets rank/region not in the new game's
       list; "not in list" values are kept only for the account's own stored game
 - [x] 10 CR-M3 Tag empty + Name contains name#tag -> split with split_tagged_id (focus-out
@@ -632,8 +635,8 @@ Group 3 (done): entry workflow and lock rule
 - [x] 13 SEC-M3 show "Last saved: <updated_at>" on unlock; keep last-seen updated_at per
       vault path in settings (timestamp only); warn if the vault goes backwards in time
 
-Group 4 (next): input and key-derivation hardening
-- [ ] 14 SEC-Low1 password_policy: NFC first, strip surrounding whitespace and Unicode Cf
+Group 4 (in progress): input and key-derivation hardening
+- [x] 14 SEC-Low1 password_policy: NFC first, strip surrounding whitespace and Unicode Cf
       before length/common-list checks (tests: decomposed chars, trailing space, ZWSP)
 - [ ] 15 SEC-Low3 reject Unicode Cf in names, logins, identity fields (ZWJ only if needed
       for emoji: tell the user); tests for LRM, RLM, ZWSP, word joiner, soft hyphen, tag chars
@@ -670,7 +673,7 @@ Group 6: cleanup (one commit each)
 - [ ] 28 Quick Add opens on the sidebar's selected game, else the last batch game
 - [ ] 29 cache the template-to-preset conversion in account_table.py
 - [ ] 30 split tests/test_vault_service.py and tests/ui/test_phase5_ui.py under ~300 lines;
-      also split `ui/app_controller.py` (317 lines: move backup/export wiring out) and flag
+      also split `ui/app_controller.py` (324 lines: move backup/export wiring out) and flag
       `ui/main_window.py` (299) and `core/vault_service.py` (300)
 - [ ] 31 move the §13 decision log to docs/DECISIONS.md with a pointer; add known/deferred:
       SEC-M4 (Qt 5.15.2 CVEs, plan PyQt6) and SEC-Low9 (log tracebacks contain full paths);

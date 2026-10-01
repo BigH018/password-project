@@ -168,7 +168,7 @@ vault are never touched.
 
 1. **Create your vault.** On first start, choose *Create a new vault*, pick where to save it
    (default: `Documents\VaultKeeper\vaultkeeper.vault`) and choose a master password of at
-   least 12 characters. A passphrase of several random words is easiest to remember and
+   least 12 characters (spaces at the ends and invisible characters don't count). A passphrase of several random words is easiest to remember and
    hardest to crack. The strength meter gives live feedback.
 2. **Write your master password down** and keep it somewhere safe and offline.
    **There is no reset and no recovery.** See [FAQ](#faq).

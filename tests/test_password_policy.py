@@ -12,7 +12,8 @@ from vaultkeeper.errors import WeakPasswordError
 
 @pytest.mark.parametrize(
     "good",
-    ["correct horse fake staple", "Fake-Passw0rd-12", "lamp orbit cactus tide", "  spaced fake  "],
+    ["correct horse fake staple", "Fake-Passw0rd-12", "lamp orbit cactus tide",
+     "  spaced fake phrase  "],
 )
 def test_accepted(good: str) -> None:
     assert pp.check_master_password(good) == good
@@ -103,3 +104,38 @@ def test_sequence_detection() -> None:
     assert pp._sequence_penalty("zyxw") == 4
     assert pp._sequence_penalty("abc") == 0
     assert pp._sequence_penalty("a1b2c3d4") == 0
+
+
+# --- SEC-Low1: measured after NFC, without surrounding whitespace or invisible characters ---
+ACUTE = chr(0x301)  # combining acute accent
+ZWSP = chr(0x200B)  # zero-width space (Unicode Cf)
+WORD_JOINER = chr(0x2060)
+
+
+@pytest.mark.parametrize(
+    ("bad", "reason"),
+    [
+        ("Fake-pass-e" + ACUTE, "at least 12"),  # 12 code points, 11 characters after NFC
+        ("Fake-pass-1 ", "at least 12"),  # a trailing space doesn't count
+        ("  Fake-pass1  ", "at least 12"),
+        ("Fake-pass-1" + ZWSP, "at least 12"),  # neither does an invisible character
+        (ZWSP * 4 + "Fake-pass-1", "at least 12"),
+        ("abab" + ZWSP + WORD_JOINER + "abababab", "different characters"),
+        ("password1234 ", "too easy to guess"),
+        (ZWSP + "Password1234", "too easy to guess"),
+    ],
+)
+def test_padding_and_invisible_characters_dont_count(bad: str, reason: str) -> None:
+    with pytest.raises(WeakPasswordError, match=reason):
+        pp.check_master_password(bad)
+
+
+def test_accepted_password_is_returned_exactly_as_typed() -> None:
+    """Only the measuring changes: the key is still derived from what was typed (NFC)."""
+    typed = " Fake caf" + "e" + ACUTE + " passphrase "
+    assert pp.check_master_password(typed) == typed
+
+
+def test_hint_measures_the_same_way() -> None:
+    assert any("12" in s for s in pp.strength_hint("Fake-pass-1 " + ZWSP).suggestions)
+

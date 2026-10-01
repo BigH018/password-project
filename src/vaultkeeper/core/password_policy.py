@@ -6,6 +6,11 @@ no control characters. The list only matches whole passwords, so a passphrase th
 contains a common word is never rejected. The rejection message stays generic.
 Everything else is advice: the hint nudges toward a passphrase of random words.
 
+Length, distinct characters and the common list are MEASURED on the NFC-normalized
+password without invisible format characters (Unicode Cf) and surrounding whitespace, so
+padding can't satisfy the rules (SEC-Low1). The password itself is returned unchanged:
+the key is derived from exactly what was typed (NFC only, docs/VAULT_FORMAT.md).
+
 The strength estimate is a rough heuristic for UI feedback, not a security guarantee.
 """
 
@@ -13,6 +18,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from dataclasses import dataclass
 
 from vaultkeeper.config.constants import MASTER_PASSWORD_MIN_LENGTH
@@ -46,17 +52,24 @@ class StrengthHint:
     suggestions: tuple[str, ...]
 
 
+def measured(password: str) -> str:
+    """What the rules count: NFC, invisible format characters removed, outer spaces stripped."""
+    text = unicodedata.normalize("NFC", password)
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf").strip()
+
+
 def check_master_password(password: str) -> str:
     """Return the password unchanged if it meets the policy, else raise WeakPasswordError."""
     try:
         clean_secret(password, "master_password", required=True)
     except ValidationError as exc:
         raise WeakPasswordError(exc.reason) from None
-    if len(password) < MASTER_PASSWORD_MIN_LENGTH:
+    counted = measured(password)
+    if len(counted) < MASTER_PASSWORD_MIN_LENGTH:
         raise WeakPasswordError(f"must be at least {MASTER_PASSWORD_MIN_LENGTH} characters")
-    if len(set(password)) < MIN_DISTINCT_CHARS:
+    if len(set(counted)) < MIN_DISTINCT_CHARS:
         raise WeakPasswordError("uses too few different characters")
-    if password.casefold() in _COMMON:
+    if counted.casefold() in _COMMON:
         raise WeakPasswordError("is too easy to guess; try a longer passphrase")
     return password
 
@@ -118,6 +131,7 @@ def estimate_bits(password: str) -> int:
 
 def strength_hint(password: str) -> StrengthHint:
     """Return a score/label and suggestions for the create/change password dialogs."""
+    password = measured(password)
     bits = estimate_bits(password)
     score = (
         4 if bits >= STRONG_BITS else 3 if bits >= GOOD_BITS else 2 if bits >= FAIR_BITS
