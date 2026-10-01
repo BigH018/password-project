@@ -168,10 +168,21 @@ class AppController(QObject):
         s = self.settings.current
         folder = Path(s.backup_dir) if s.backup_dir else None
         self.backups = BackupService(service.path, folder, s.backup_keep,
-                                     s.backup_min_interval_minutes)
+                                     s.backup_min_interval_minutes,
+                                     last_success=s.backup_last_success,
+                                     last_failure=s.backup_last_failure)
         if self._after_save_backup not in service.on_saved:
             service.on_saved.append(self._after_save_backup)
         self.window.set_backups_enabled(self.backups.enabled)
+        self._backup_status_changed()
+
+    def _backup_status_changed(self) -> None:
+        """Keep the "last backup failed" banner and the stored status times up to date."""
+        if self.backups is None:
+            return
+        self.window.set_backup_failure(self.backups.last_failure)
+        self.settings.update(backup_last_success=self.backups.last_success,
+                             backup_last_failure=self.backups.last_failure)
 
     def _run_backup(self, step: Callable[[], Path | None]) -> None:
         try:
@@ -179,6 +190,7 @@ class AppController(QObject):
                 self.window.statusBar().showMessage("Backup saved.", 4000)
         except VaultKeeperError as exc:
             self.window.statusBar().showMessage(f"Backup failed: {error_text(exc)}", 10000)
+        self._backup_status_changed()
 
     def _after_save_backup(self) -> None:
         if self.backups is not None:
@@ -198,6 +210,7 @@ class AppController(QObject):
                                  backup_keep=self.backups.keep,
                                  backup_min_interval_minutes=self.backups.min_interval_minutes)
         self.window.set_backups_enabled(self.backups.enabled)
+        self._backup_status_changed()  # "Backup now" may have run in the dialog
 
     def _export(self) -> None:
         if self.service is None or not self.service.is_unlocked:
@@ -220,6 +233,7 @@ class AppController(QObject):
         if dialog.exec_():
             self.window.banner.setVisible(self.service.opened_from_backup)
             note = after_password_change(self.window, self.backups) if self.backups else ""
+            self._backup_status_changed()
             self.window.statusBar().showMessage(f"Master password changed. {note}", 10000)
 
     def close_dialogs(self) -> None:

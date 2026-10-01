@@ -162,3 +162,54 @@ def test_delete_backups_only_touches_this_vaults_backups(vault: VaultService, tm
     other.write_text("fake", encoding="utf-8")
     assert backups.delete_backups([vault.path, other, tmp_path / "elsewhere.vault"]) == 0
     assert vault.path.exists() and other.exists() and kept.exists()
+
+
+# --- CR-H2: backup failures are recorded (and logged without details) ----------------------
+
+
+def test_failed_backup_is_recorded_and_logged_without_details(
+    vault: VaultService, tmp_path: Path, clock: Clock, caplog: pytest.LogCaptureFixture
+) -> None:
+    blocker = tmp_path / "not-a-folder"
+    blocker.write_text("fake", encoding="utf-8")
+    backups = BackupService(vault.path, blocker / "bk", 10, 10, clock, clock.stamp)
+    with caplog.at_level("WARNING"), pytest.raises(VaultIOError):
+        backups.backup_now()
+    assert backups.last_failure is not None and backups.last_success is None
+    assert "Backup failed (" in caplog.text
+    assert str(tmp_path) not in caplog.text and "not-a-folder" not in caplog.text
+
+
+def test_success_clears_the_failure(vault: VaultService, tmp_path: Path, clock: Clock) -> None:
+    backups = BackupService(vault.path, tmp_path / "bk", 10, 10, clock, clock.stamp,
+                            last_failure="2026-01-01T00:00:00+00:00")
+    assert backups.last_failure is not None
+    backups.backup_now()
+    assert backups.last_failure is None
+    assert backups.last_success is not None and backups.last_success.endswith("+00:00")
+
+
+def test_unreadable_folder_becomes_a_friendly_error(
+    vault: VaultService, tmp_path: Path, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backups = _service(vault, tmp_path, clock)
+    backups.backup_now()
+
+    def denied(_self: Path) -> None:
+        raise PermissionError("access denied")
+
+    monkeypatch.setattr(Path, "iterdir", denied)
+    with pytest.raises(VaultIOError):
+        backups.backup_now()
+    assert backups.last_failure is not None
+
+
+def test_lock_time_failure_is_recorded(vault: VaultService, tmp_path: Path,
+                                       clock: Clock) -> None:
+    blocker = tmp_path / "not-a-folder"
+    blocker.write_text("fake", encoding="utf-8")
+    backups = BackupService(vault.path, blocker / "bk", 10, 10, clock, clock.stamp)
+    backups.dirty = True
+    with pytest.raises(VaultIOError):
+        backups.on_lock_or_exit()
+    assert backups.last_failure is not None

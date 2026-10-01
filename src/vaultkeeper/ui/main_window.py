@@ -22,7 +22,7 @@ from vaultkeeper.ui.copy_actions import CopyActions
 from vaultkeeper.ui.game_setup_dialog import GameSetupDialog
 from vaultkeeper.ui.generator_dialog import GeneratorDialog
 from vaultkeeper.ui.main_menus import install_toolbar_and_menus
-from vaultkeeper.ui.messages import confirm, error_text, show_error
+from vaultkeeper.ui.messages import confirm, error_text, local_time_text, show_error
 from vaultkeeper.ui.quick_add_dialog import QuickAddDialog
 from vaultkeeper.ui.safe_text import link_label, plain_label
 from vaultkeeper.ui.theme import MUTED_STYLE, WARNING_BANNER_STYLE
@@ -66,6 +66,10 @@ class MainWindow(QMainWindow):
         self.backups_off.setStyleSheet(WARNING_BANNER_STYLE)
         self.backups_off.linkActivated.connect(lambda _link: self.backups_requested.emit())
         self.backups_off.hide()
+        self.backup_failed = plain_label(parent=self)
+        self.backup_failed.setWordWrap(True)
+        self.backup_failed.setStyleSheet(WARNING_BANNER_STYLE)
+        self.backup_failed.hide()
         self.panel = AccountsPanel(self)
         self.copy = CopyActions(self, self.panel, self._game_by_id)
         self.locked_label = plain_label("Locked", self)
@@ -79,6 +83,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(central)
         layout.addWidget(self.banner)
         layout.addWidget(self.backups_off)
+        layout.addWidget(self.backup_failed)
         layout.addWidget(self.stack, 1)
         self.setCentralWidget(central)
 
@@ -140,6 +145,7 @@ class MainWindow(QMainWindow):
         self.show_passwords_action.setChecked(False)
         self.banner.hide()
         self.backups_off.hide()
+        self.backup_failed.hide()
         self.stack.setCurrentWidget(self.locked_label)
         self._update_actions()
         self.statusBar().showMessage("Locked")
@@ -187,6 +193,13 @@ class MainWindow(QMainWindow):
     def set_backups_enabled(self, enabled: bool) -> None:
         """Show the "backups are off" banner while unlocked without a backup folder."""
         self.backups_off.setVisible(self.unlocked and not enabled)
+
+    def set_backup_failure(self, failed_at: str | None) -> None:
+        """Show "last backup failed" (UTC ISO time) until a backup succeeds; None hides it."""
+        if failed_at is not None:
+            self.backup_failed.setText(f"Last backup failed at {local_time_text(failed_at)}. "
+                                       "Check the backup folder (File -> Backups...).")
+        self.backup_failed.setVisible(self.unlocked and failed_at is not None)
 
     def context_extra_actions(self) -> list[QAction]:
         """Non-copy actions offered in the table's right-click menu."""

@@ -119,3 +119,72 @@ def test_controller_backs_up_after_password_change(qtbot: Any, tmp_path: Path,
     assert len(remaining) == 1  # old one deleted, new one made at once (despite interval)
     VaultService(remaining[0], kdf_params=FAST_KDF).unlock(OTHER_MASTER)
     assert "Deleted 1" in controller.window.statusBar().currentMessage()
+
+
+# --- CR-H2: failures are visible until a backup works again --------------------------------
+
+
+def _controller(qtbot: Any, tmp_path: Path, svc: VaultService, backup_dir: Path,
+                monkeypatch: pytest.MonkeyPatch) -> Any:
+    from vaultkeeper.ui import app_controller
+    from vaultkeeper.ui.qt_adapters import QtTaskRunner
+
+    settings = Settings(vault_path=str(svc.path), backup_dir=str(backup_dir),
+                        backup_min_interval_minutes=60)
+    monkeypatch.setattr(app_controller.AppController, "_unlock", lambda self: None)
+    controller = app_controller.AppController(settings, tmp_path / "s.json", QtTaskRunner(),
+                                              lambda p: svc)
+    qtbot.addWidget(controller.window)
+    controller.service = svc
+    controller._show_unlocked()
+    return controller
+
+
+def _blocked_folder(tmp_path: Path) -> Path:
+    blocker = tmp_path / "not-a-folder"
+    blocker.write_text("fake", encoding="utf-8")
+    return blocker / "bk"
+
+
+def test_failed_backup_shows_a_banner_until_one_succeeds(
+        qtbot: Any, tmp_path: Path, svc: VaultService,
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    controller = _controller(qtbot, tmp_path, svc, _blocked_folder(tmp_path), monkeypatch)
+    window = controller.window
+    assert window.backup_failed.isHidden()
+    svc.save()  # after_save backup fails
+    assert not window.backup_failed.isHidden()
+    assert window.backup_failed.text().startswith("Last backup failed at ")
+    assert "Check the backup folder" in window.backup_failed.text()
+    assert controller.settings.current.backup_last_failure is not None
+
+    controller.backups.configure(tmp_path / "good", 10, 60)
+    controller._backup_now()
+    assert window.backup_failed.isHidden()
+    assert controller.settings.current.backup_last_failure is None
+    assert controller.settings.current.backup_last_success is not None
+
+
+def test_lock_time_failure_is_shown_after_the_next_unlock(
+        qtbot: Any, tmp_path: Path, svc: VaultService,
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    controller = _controller(qtbot, tmp_path, svc, tmp_path / "good", monkeypatch)
+    svc.save()  # first backup works
+    svc.save()  # dirty, within the interval
+    assert controller.window.backup_failed.isHidden()
+    controller.backups.configure(_blocked_folder(tmp_path), 10, 60)
+    controller.lock()  # the lock-time backup fails while the window is hidden
+    assert controller.settings.current.backup_last_failure is not None
+
+    svc.unlock(MASTER)
+    controller._show_unlocked()
+    assert not controller.window.backup_failed.isHidden()
+
+
+def test_backups_dialog_shows_last_successful_backup(qtbot: Any, svc: VaultService,
+                                                     backups: BackupService) -> None:
+    dialog = backup_dialog.BackupDialog(backups, choose_folder=lambda _p, _c: "")
+    qtbot.addWidget(dialog)
+    assert "No successful backup yet" in dialog.last_backup.text()
+    dialog.backup_now_button.click()
+    assert dialog.last_backup.text().startswith("Last successful backup: ")

@@ -8,6 +8,9 @@ password and never contains plaintext. Policy (approved):
 - right after a master-password change (older backups still open with the OLD password;
   ``backups_with_old_password`` finds them by their header salt so the user can delete them);
 - keep the newest ``keep`` backups of this vault, delete older ones.
+
+The last success and failure times (UTC ISO-8601) are kept so the UI can warn until a backup
+works again. Failures are logged by error type only (no paths).
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ import logging
 import re
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from vaultkeeper.config.constants import VAULT_EXTENSION
@@ -40,6 +44,8 @@ class BackupService:
         min_interval_minutes: int,
         clock: Callable[[], float] = time.time,
         stamp: Callable[[], str] = lambda: time.strftime(_STAMP),
+        last_success: str | None = None,
+        last_failure: str | None = None,
     ) -> None:
         self._vault = vault_path
         self._clock = clock
@@ -49,6 +55,8 @@ class BackupService:
         self.min_interval_minutes = min_interval_minutes
         self.dirty = False
         self._last_backup_at: float | None = None
+        self.last_success = last_success  # UTC ISO-8601 of the last good backup
+        self.last_failure = last_failure  # set until a backup succeeds again
 
     # --- configuration ----------------------------------------------------------------------
 
@@ -92,17 +100,32 @@ class BackupService:
 
     # --- actions ----------------------------------------------------------------------------
 
+    def _now_iso(self) -> str:
+        return datetime.fromtimestamp(self._clock(), tz=UTC).isoformat(timespec="seconds")
+
     def backup_now(self) -> Path:
-        """Write a backup immediately and rotate. Returns the new backup's path."""
+        """Write a backup immediately and rotate. Returns the new backup's path.
+
+        A failure is recorded in ``last_failure`` (until a backup succeeds) and re-raised as
+        a VaultKeeperError.
+        """
         if self.backup_dir is None:
             raise VaultIOError("Choose a backup folder first.")
         if not self._vault.is_file():
             raise VaultIOError("There is no saved vault to back up yet.")
-        target = self._target()
-        copy_file_verified(self._vault, target)
-        self._last_backup_at = self._clock()
-        self.dirty = False
-        self._rotate()
+        try:
+            target = self._target()
+            copy_file_verified(self._vault, target)
+            self._last_backup_at = self._clock()
+            self.dirty = False
+            self._rotate()
+        except (VaultKeeperError, OSError) as exc:
+            self.last_failure = self._now_iso()
+            log.warning("Backup failed (%s)", type(exc).__name__)
+            if isinstance(exc, OSError):
+                raise VaultIOError("Could not write to the backup folder.") from exc
+            raise
+        self.last_success, self.last_failure = self._now_iso(), None
         log.info("Backup written")
         return target
 

@@ -21,7 +21,7 @@ from vaultkeeper.config import constants as c
 from vaultkeeper.core.backup import BackupService
 from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui import messages
-from vaultkeeper.ui.messages import error_text
+from vaultkeeper.ui.messages import error_text, local_time_text
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE, WARNING_BANNER_STYLE
 
@@ -91,6 +91,8 @@ class BackupDialog(QDialog):
         self.warning.setStyleSheet(WARNING_BANNER_STYLE)
         self.status = plain_label(parent=self)
         self.status.setStyleSheet(MUTED_STYLE)
+        self.last_backup = plain_label(parent=self)
+        self.last_backup.setStyleSheet(MUTED_STYLE)
         self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.error_label.setWordWrap(True)
@@ -116,6 +118,7 @@ class BackupDialog(QDialog):
         layout.addLayout(form)
         layout.addWidget(self.warning)
         layout.addWidget(self.status)
+        layout.addWidget(self.last_backup)
         layout.addWidget(self.error_label)
         layout.addLayout(buttons)
 
@@ -156,6 +159,12 @@ class BackupDialog(QDialog):
         self.status.setText(f"{len(existing)} backup(s) in this folder. Newest: "
                             f"{existing[-1].name}" if existing else "No backups yet.")
         self.backup_now_button.setEnabled(self._backups.enabled)
+        ok, failed = self._backups.last_success, self._backups.last_failure
+        line = (f"Last successful backup: {local_time_text(ok)}." if ok
+                else "No successful backup yet.")
+        if failed:
+            line += f" The last attempt failed at {local_time_text(failed)}."
+        self.last_backup.setText(line)
 
     # --- actions ----------------------------------------------------------------------------
 
@@ -169,6 +178,7 @@ class BackupDialog(QDialog):
             self._backups.backup_now()
         except VaultKeeperError as exc:
             self.error_label.setText(error_text(exc))
+            self._refresh()
             return
         self.error_label.clear()
         self._refresh()

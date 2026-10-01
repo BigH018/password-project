@@ -5,6 +5,8 @@ Texts stay generic: they never echo passwords, account data or which check faile
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from PyQt5.QtWidgets import QMessageBox, QWidget
 
 from vaultkeeper.errors import (
@@ -82,6 +84,14 @@ def error_text(exc: BaseException) -> str:
     if isinstance(exc, VaultIOError | VaultKeeperError):
         return str(exc)
     return UNEXPECTED
+
+
+def local_time_text(iso: str) -> str:
+    """A stored UTC ISO-8601 time as local "YYYY-MM-DD HH:MM" for display."""
+    try:
+        return datetime.fromisoformat(iso).astimezone().strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        return "an unknown time"
 
 
 def show_error(parent: QWidget | None, title: str, text: str) -> None:

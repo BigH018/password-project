@@ -140,7 +140,8 @@ vaultkeeper/                       repo root
     errors.py                      custom exception hierarchy
     config/
       constants.py                 statuses, per-game rank/region presets, defaults, limits
-      settings.py                  load/save non-secret settings JSON (incl. window geometry);
+      settings.py                  load/save non-secret settings JSON (incl. window geometry,
+                                   last backup success/failure times);
                                    SettingsFile = current settings + update-and-save
       paths.py                     app-data dir and default file locations
       logging_setup.py             logging config + redaction filter (defense in depth); exception
@@ -193,7 +194,8 @@ vaultkeeper/                       repo root
       theme.py                     Fusion + dark palette + styles/dark.qss (fallback: palette
                                    only), shared label styles
       welcome_dialog.py            create new vault / open existing file
-      main_window.py               actions, backup banner, status bar, delete; hosts AccountsPanel
+      main_window.py               actions, backup banners (opened from .bak, backups off, last
+                                   backup failed), status bar, delete; hosts AccountsPanel
       main_menus.py                toolbar + File/Games/Tools menus built from the window's actions
       accounts_view.py             AccountsPanel: game sidebar | search bar over sortable table
       unlock_dialog.py             master password, busy state, explicit "Try the backup copy",
@@ -261,7 +263,8 @@ vaultkeeper/                       repo root
                                    test_account_dialog, test_game_setup, test_pickers,
                                    test_shell (welcome, controller lock/demo details),
                                    test_phase5_ui (copy, auto-lock, generator, backups, export),
-                                   test_backup_ui (backups after a password change),
+                                   test_backup_ui (backups after a password change, failure
+                                   banner until a backup works, last successful backup),
                                    test_quick_add (save & next, batch, paste, keys, timeout),
                                    test_theme (stylesheet loads, offline, palette fallback),
                                    test_branding (icon, titles, no "?", window hidden while locked),
@@ -438,6 +441,9 @@ python -m vaultkeeper  # run the app
 - After a master-password change (CR-M1/SEC-M1): `.bak` is re-saved under the new password,
   a backup is made at once, and the user is offered to delete backups that still open with the
   old password (found by header salt; only offered once a new-password backup exists).
+- Backup failures (CR-H2) are logged by error type only and shown as a banner ("Last backup
+  failed at <time>") until a backup succeeds. The last success/failure times are kept in
+  settings, so a failure at lock or exit shows after the next unlock.
 - Paste assist also reads `user:`/`pass:` style lines. It never saves automatically.
 - Defaults: auto-lock 5 min, Quick Add inactivity 15 min, lock on minimize and on Windows
   session lock, clipboard clear 15 s. All configurable.

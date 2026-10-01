@@ -1,7 +1,7 @@
 """Non-secret user settings, stored as JSON in the app data directory.
 
-Settings never contain account data or secrets: only paths, timeouts and UI preferences
-(including the main window's size/position as an opaque base64 blob).
+Settings never contain account data or secrets: only paths, timeouts, UI preferences
+(including the main window's size/position as an opaque base64 blob) and backup status times.
 Loading is forgiving. A missing, corrupt or out-of-range value falls back to its default,
 so a broken settings file can never stop the app from starting.
 """
@@ -14,6 +14,7 @@ import logging
 import os
 import string
 from dataclasses import asdict, dataclass, fields, replace
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,7 @@ log = logging.getLogger(__name__)
 SETTINGS_VERSION = 1
 MAX_PATH_LENGTH = 4096
 MAX_GEOMETRY_LENGTH = 2048
+MAX_TIMESTAMP_LENGTH = 40
 _BASE64_CHARS = frozenset(string.ascii_letters + string.digits + "+/=")
 
 
@@ -42,6 +44,8 @@ class Settings:
     lock_on_minimize: bool = c.DEFAULT_LOCK_ON_MINIMIZE
     lock_on_session_lock: bool = c.DEFAULT_LOCK_ON_SESSION_LOCK
     window_geometry: str | None = None  # Qt saveGeometry() as base64; None = default size
+    backup_last_success: str | None = None  # UTC ISO-8601 of the last good backup
+    backup_last_failure: str | None = None  # set until a backup succeeds again
 
 
 _INT_RANGES: dict[str, tuple[int, int]] = {
@@ -53,6 +57,7 @@ _INT_RANGES: dict[str, tuple[int, int]] = {
 }
 _BOOL_FIELDS = frozenset({"lock_on_minimize", "lock_on_session_lock"})
 _PATH_FIELDS = frozenset({"vault_path", "backup_dir"})
+_TIMESTAMP_FIELDS = frozenset({"backup_last_success", "backup_last_failure"})
 
 
 def _valid_path(value: Any) -> bool:
@@ -69,9 +74,23 @@ def _valid_geometry(value: Any) -> bool:
     )
 
 
+def _valid_timestamp(value: Any) -> bool:
+    """None or a timezone-aware ISO-8601 timestamp."""
+    if value is None:
+        return True
+    if not isinstance(value, str) or not 0 < len(value) <= MAX_TIMESTAMP_LENGTH:
+        return False
+    try:
+        return datetime.fromisoformat(value).tzinfo is not None
+    except ValueError:
+        return False
+
+
 def _valid_value(name: str, value: Any) -> bool:
     if name == "window_geometry":
         return _valid_geometry(value)
+    if name in _TIMESTAMP_FIELDS:
+        return _valid_timestamp(value)
     if name in _PATH_FIELDS:
         return _valid_path(value)
     if name in _BOOL_FIELDS:

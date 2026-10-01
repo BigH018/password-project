@@ -153,3 +153,21 @@ def test_settings_file_rejects_invalid(tmp_path: Path) -> None:
         store.update(autolock_minutes=0)
     assert store.current == Settings() and not store.path.exists()
 
+
+
+# --- backup status (CR-H2) ------------------------------------------------------------------
+STAMP = "2026-10-01T12:30:00+00:00"
+
+
+def test_backup_status_round_trip(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    save_settings(path, Settings(backup_last_success=STAMP, backup_last_failure=STAMP))
+    loaded = load_settings(path)
+    assert loaded.backup_last_success == STAMP and loaded.backup_last_failure == STAMP
+
+
+@pytest.mark.parametrize("bad", ["yesterday", "2026-10-01T12:30:00", "x" * 100, 5, ""])
+def test_invalid_backup_status_is_ignored(bad: object) -> None:
+    assert settings_from_dict({"backup_last_failure": bad}).backup_last_failure is None
+    with pytest.raises(ValidationError):
+        update_settings(Settings(), backup_last_success=bad)
