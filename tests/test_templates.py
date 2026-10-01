@@ -154,3 +154,13 @@ def test_secret_extra_fields_never_searched() -> None:
 def test_account_repr_hides_extra_values() -> None:
     account = make_account(make_game(), extra=((CODE.id, "FAKECODE99"),))
     assert "FAKECODE99" not in repr(account)
+
+
+def test_ten_divisions_and_roman_numerals() -> None:
+    template = clean_template(GameTemplate(tiers=(TierDef("Champion", 10),),
+                                           roman_divisions=True))
+    preset = template.to_preset()
+    assert c.format_rank(preset, "Champion", 10) == "Champion X"
+    assert c.format_rank(preset, "Champion", 9) == "Champion IX"
+    with pytest.raises(ValidationError):
+        clean_template(GameTemplate(tiers=(TierDef("Too many", 11),)))

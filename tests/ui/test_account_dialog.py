@@ -275,3 +275,15 @@ def test_moving_game_warns_about_dropped_extras(qtbot: Any, accounts: AccountSer
     assert dialog.move_label.text() == ""
     dialog.form.game.setCurrentIndex(dialog.form.game.findData(games[0].id))
     assert "drops 1 extra field value" in dialog.move_label.text()
+
+
+def test_bare_minimum_username_and_password(qtbot: Any, accounts: AccountService,
+                                            games: list[Game]) -> None:
+    """An account can be just a game, a username and a password (no email, no name)."""
+    dialog = _open(qtbot, accounts, games, default_game_id=games[0].id)
+    dialog.form.login.setText("just_a_login")
+    dialog.form.password.setText("Fake-Only-Pass-1")
+    dialog.save_button.click()
+    assert dialog.result() == QDialog.Accepted, dialog.error_label.text()
+    saved = accounts.list_all()[0]
+    assert (saved.login_username, saved.email, saved.display_name) == ("just_a_login", "", "")

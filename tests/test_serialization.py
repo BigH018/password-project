@@ -119,7 +119,7 @@ def _mutations() -> list[tuple[str, Any]]:
         ("game bad id", setv(["games", 0, "id"], "nope")),
         ("game missing template", drop(["games", 0, "template"])),
         ("template extra key", setv(["games", 0, "template", "x"], 1)),
-        ("divisions too big", setv(["games", 0, "template", "tiers", 0, "divisions"], 9)),
+        ("divisions too big", setv(["games", 0, "template", "tiers", 0, "divisions"], 11)),
         ("divisions bool", setv(["games", 0, "template", "tiers", 0, "divisions"], True)),
         ("hidden core field", setv(["games", 0, "template", "hidden_fields"], ["password"])),
         ("bad field kind", setv(["games", 0, "template", "custom_fields"], [BAD_FIELD])),

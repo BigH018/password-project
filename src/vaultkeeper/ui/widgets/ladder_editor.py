@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
 )
 
 from vaultkeeper.core.game_template import MAX_DIVISIONS, GameTemplate, TierDef
+from vaultkeeper.ui.widgets.add_rank_dialog import AddRankDialog
 
 
 class LadderEditor(QWidget):
@@ -26,12 +27,12 @@ class LadderEditor(QWidget):
     def __init__(self, parent: Any = None) -> None:
         super().__init__(parent)
         self.table = QTableWidget(0, 2, self)
-        self.table.setHorizontalHeaderLabels(["Rank (lowest first)", "Divisions"])
+        self.table.setHorizontalHeaderLabels(["Rank (lowest first)", "Divisions (0 = none)"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.verticalHeader().hide()
-        self.add_button = QPushButton("Add rank", self)
+        self.add_button = QPushButton("Add ranks...", self)
         self.remove_button = QPushButton("Remove", self)
         self.up_button = QPushButton("Up", self)
         self.down_button = QPushButton("Down", self)
@@ -49,7 +50,7 @@ class LadderEditor(QWidget):
         layout.addWidget(self.best_is_one)
         layout.addWidget(self.roman)
 
-        self.add_button.clicked.connect(lambda: self.add_tier("", 0, edit=True))
+        self.add_button.clicked.connect(self.open_add_dialog)
         self.remove_button.clicked.connect(self._remove)
         self.up_button.clicked.connect(lambda: self._move(-1))
         self.down_button.clicked.connect(lambda: self._move(1))
@@ -69,6 +70,12 @@ class LadderEditor(QWidget):
         self.table.selectRow(row)
         if edit:
             self.table.editItem(self.table.item(row, 0))
+
+    def open_add_dialog(self) -> AddRankDialog:
+        """Open the quick add form (name + divisions yes/no + how many)."""
+        dialog = AddRankDialog(self.add_tier, [t.name for t in self.tiers()], self)
+        dialog.exec_()
+        return dialog
 
     def _remove(self) -> None:
         row = self.table.currentRow()

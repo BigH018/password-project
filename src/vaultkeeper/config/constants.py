@@ -130,7 +130,8 @@ CUSTOM = GamePreset(key="custom", label="Custom", tiers=(), regions=(), free_tex
 PRESETS: dict[str, GamePreset] = {p.key: p for p in (VALORANT, MARVEL_RIVALS, OVERWATCH, CUSTOM)}
 DEFAULT_PRESET_KEY = CUSTOM.key
 
-_ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V"}
+_ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII", 9: "IX",
+          10: "X"}
 UNRANKED_LABEL = "Unranked"
 
 

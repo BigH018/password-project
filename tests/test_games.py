@@ -97,7 +97,7 @@ def test_set_template_validates(games: GameService) -> None:
     for bad in (
         GameTemplate(tiers=(TierDef("Gold"), TierDef("gold"))),  # duplicate rank
         GameTemplate(tiers=(TierDef(""),)),                        # empty name
-        GameTemplate(tiers=(TierDef("Gold", 6),)),                 # too many divisions
+        GameTemplate(tiers=(TierDef("Gold", 11),)),                # too many divisions
         GameTemplate(regions=("EU", "eu")),
         GameTemplate(custom_fields=(CustomField(new_id(), "Level", FieldKind.CHOICE),)),
         GameTemplate(hidden_fields=frozenset({"password"})),       # can't hide a core field

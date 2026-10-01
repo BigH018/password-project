@@ -54,7 +54,7 @@ in `core/text_validation.py` (control characters are rejected, except newlines i
 | template | GameTemplate | ranks, regions, fields (below)            |
 
 `GameTemplate` (`core/game_template.py`):
-- `tiers`: ordered lowest first, each `TierDef(name, divisions 0-5)`.
+- `tiers`: ordered lowest first, each `TierDef(name, divisions 0-10)`.
 - `best_division_is_one`: True if division 1 is the top (Overwatch, Marvel Rivals). False if
   the highest number is the top (Valorant).
 - `roman_divisions`: show divisions as I/II/III.

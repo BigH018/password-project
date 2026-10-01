@@ -28,7 +28,7 @@ class FieldKind(StrEnum):
 OPTIONAL_FIELDS: tuple[str, ...] = (
     "tag", "region", "rank", "email_password", "email_login_url", "recovery_email",
 )  # fmt: skip
-MAX_DIVISIONS = 5
+MAX_DIVISIONS = 10
 MAX_TIERS = 40
 MAX_REGIONS = 40
 MAX_CUSTOM_FIELDS = 20

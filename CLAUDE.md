@@ -192,6 +192,7 @@ vaultkeeper/                       repo root
         search_bar.py              free text + status/rank/region/label dropdowns -> AccountFilter
         account_form.py            form built from the game template (hidden fields, extra fields)
         ladder_editor.py           rank list editor: tiers + divisions, order, division style
+        add_rank_dialog.py         quick add: rank name, has divisions? how many (1-10); Enter = next
         extra_fields_editor.py     extra fields editor: label, type, dropdown options (ids kept)
         rank_picker.py             RankPicker (tier + division) and RegionPicker, preset-driven;
                                    free text for custom games; legacy values shown, never dropped
@@ -416,10 +417,12 @@ python -m vaultkeeper  # run the app
 - Account dialog: rank/region are preset dropdowns (free text for custom games). A stored
   value not in the preset is shown marked "(not in this game's list)" rather than dropped.
   After saving, the edited/new row stays selected.
-- Per-game templates (4d): every game, built-ins included, has editable ranks (tiers + 0-5
-  divisions), regions, shown standard fields and extra fields (text/number/dropdown/secret).
+- Per-game templates (4d): every game, built-ins included, has editable ranks (tiers + 0-10
+  divisions, entered as "has divisions? how many?"), regions, shown standard fields and extra fields (text/number/dropdown/secret).
   Template edits are never blocked and never delete data (kept values marked "not in this
   game's list"). This replaced "block a preset change if accounts become invalid".
+- Minimum account = a game + one of username / in-game name / email. Password, email and
+  everything else are optional (tested: username + password only).
 - No silent default game: adding from "All games" starts on "Choose a game..." (rank and
   region disabled until chosen); a selected sidebar game is pre-filled.
 - UI tests stub `messages.confirm`/`show_error` by default (`tests/ui_support.py`): a real

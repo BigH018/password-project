@@ -148,3 +148,50 @@ def test_delete_rules(dialog: gs.GameSetupDialog, games: GameService, store: Fak
     dialog.delete_button.click()
     assert [g.name for g in games.list_games()] == ["Valorant"]
     assert dialog.list.currentItem().data(Qt.UserRole) is None  # back to "+ New game"
+
+
+def test_add_rank_dialog_asks_about_divisions(qtbot: Any) -> None:
+    from vaultkeeper.ui.widgets.add_rank_dialog import AddRankDialog
+
+    added: list[tuple[str, int]] = []
+    dialog = AddRankDialog(lambda name, div: added.append((name, div)), existing=["Gold"])
+    qtbot.addWidget(dialog)
+    dialog.show()
+    assert not dialog.count.isEnabled()  # no divisions until ticked
+
+    dialog.name.setText("Bronze")
+    dialog.has_divisions.setChecked(True)
+    dialog.count.setValue(3)
+    dialog.add_button.click()
+    assert added == [("Bronze", 3)]
+    assert dialog.name.text() == "" and dialog.has_divisions.isChecked()  # ready for the next
+
+    dialog.name.setText("Silver")
+    qtbot.keyPress(dialog.name, Qt.Key_Return)  # Enter adds too
+    dialog.has_divisions.setChecked(False)
+    dialog.name.setText("Unreal")
+    dialog.add_button.click()
+    assert added == [("Bronze", 3), ("Silver", 3), ("Unreal", 0)]
+
+    dialog.name.setText("gold")
+    dialog.add_button.click()
+    assert "already in the list" in dialog.error_label.text() and len(added) == 3
+    dialog.name.setText("  ")
+    dialog.add_button.click()
+    assert "Type a rank name" in dialog.error_label.text()
+
+
+def test_add_ranks_button_feeds_the_ladder(qtbot: Any, dialog: gs.GameSetupDialog,
+                                           monkeypatch: pytest.MonkeyPatch) -> None:
+    from vaultkeeper.ui.widgets import ladder_editor
+
+    def fake_exec(self: Any) -> int:
+        self.name.setText("Champion")
+        self.has_divisions.setChecked(True)
+        self.count.setValue(10)  # up to 10 divisions now
+        self._add()
+        return 1
+
+    monkeypatch.setattr(ladder_editor.AddRankDialog, "exec_", fake_exec)
+    dialog.ladder.add_button.click()
+    assert dialog.ladder.tiers() == [TierDef("Champion", 10)]
