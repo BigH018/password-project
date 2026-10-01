@@ -154,7 +154,8 @@ vaultkeeper/                       repo root
       migrations.py                migrate_v1_to_v2 (preset key -> template, accounts get extra)
       serialization.py             VaultData <-> JSON dict, structure validation, runs migrations
       text_validation.py           generic text/secret/email/URL/uuid checks (clean_* helpers)
-      validation.py                field rules (names, tags, labels, presets, ranks, TOTP) + validate_account
+      validation.py                field rules (names, tags, labels, presets, ranks, TOTP) + validate_account;
+                                   split_name_and_tag (name#tag typed in the name, tag empty)
       store.py                     VaultStore protocol + apply_change (save or roll back in memory)
       password_policy.py           master password rules (min 12) + strength hint
       tasks.py                     TaskRunner protocol + InlineTaskRunner
@@ -277,6 +278,7 @@ vaultkeeper/                       repo root
                                    test_window_geometry (saved on lock/quit, restored at start),
                                    test_error_dialog (notice, threads, field labels complete),
                                    test_plain_text (HTML-looking user data shown literally),
+                                   test_account_form (name#tag split on focus-out),
                                    test_secret_field (clear() wipes undo in all password dialogs)
 ```
 
@@ -465,6 +467,8 @@ python -m vaultkeeper  # run the app
 - Rank division is optional (a tier can be stored without one). Loading a vault checks
   structure only, not presets, so preset changes never stop an old vault from opening.
 - An account needs at least one identifier: login username, in-game name or email.
+- `name#tag` typed into the name with the tag empty is split (CR-M3): in core on save, and
+  in the form on focus-out. If the tag is filled in too, the name's '#' is still an error.
 - `pyproject.toml` reads dependencies from `requirements.txt` (single source of pins).
 - The master password is NFC-normalized before the KDF (the app and the recovery script agree).
 - Master password policy: ≥12 chars, ≥5 distinct chars, not on a small common-password list.
@@ -600,9 +604,9 @@ Group 2 (done, pushed with this CLAUDE.md update):
       changed on disk (`core/vault_disk.py`, VaultConflictError)
 
 Group 3 (next): entry workflow and lock rule
-- [ ] 9 CR-M2 switching game on the account form resets rank/region not in the new game's
+- [x] 9 CR-M2 switching game on the account form resets rank/region not in the new game's
       list; "not in list" values are kept only for the account's own stored game
-- [ ] 10 CR-M3 Tag empty + Name contains name#tag -> split with split_tagged_id (focus-out
+- [x] 10 CR-M3 Tag empty + Name contains name#tag -> split with split_tagged_id (focus-out
       or save)
 - [ ] 11 CR-M4 deleteLater() on context menus after exec_() (copy_actions.py) and on the
       QMessageBox in messages.py (nothing holding secrets survives a lock); test menus deleted

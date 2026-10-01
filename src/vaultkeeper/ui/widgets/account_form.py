@@ -24,6 +24,7 @@ from PyQt5.QtWidgets import (
 from vaultkeeper.config.constants import STATUSES
 from vaultkeeper.core.game_template import CustomField, FieldKind, GameTemplate
 from vaultkeeper.core.models import Account, Game, Rank
+from vaultkeeper.core.validation import split_name_and_tag
 from vaultkeeper.ui.generator_dialog import GeneratorDialog
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.widgets.rank_picker import NOT_IN_LIST, RankPicker, RegionPicker
@@ -106,6 +107,7 @@ class AccountForm(QWidget):
         }  # fmt: skip
 
         self.game.currentIndexChanged.connect(self._game_changed)
+        self.display_name.editingFinished.connect(self._split_name_and_tag)
         self.generate_button.clicked.connect(self._generate_password)
         for edit in (self.display_name, self.tag, self.login, self.email, self.email_url,
                      self.recovery_email, self.tags):
@@ -116,6 +118,13 @@ class AccountForm(QWidget):
             picker.changed.connect(self.changed)
         self.status.currentIndexChanged.connect(self.changed)
         self.notes.textChanged.connect(self.changed)
+
+    def _split_name_and_tag(self) -> None:
+        """Typed "name#tag" with the tag empty: show it split, as saving would store it."""
+        name, tag = split_name_and_tag(self.display_name.text(), self.tag.text())
+        if name != self.display_name.text():
+            self.display_name.setText(name)
+            self.tag.setText(tag or "")
 
     def _generate_password(self) -> None:
         dialog = GeneratorDialog(allow_use=True, parent=self)

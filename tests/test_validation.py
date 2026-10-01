@@ -145,3 +145,27 @@ def test_validate_account_checks_preset() -> None:
         v.validate_account(account, c.VALORANT)
     overwatch_account = replace(account, rank=Rank("Master", 4))
     assert v.validate_account(overwatch_account, c.OVERWATCH).region == "Europe"
+
+
+# --- CR-M3: name#tag typed into the name with the tag empty is split --------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "tag", "expected"),
+    [("FakePlayer#TEST", None, ("FakePlayer", "TEST")),
+     ("FakePlayer#TEST", "  ", ("FakePlayer", "TEST")),
+     ("FakePlayer", None, ("FakePlayer", None)),
+     ("FakePlayer#TEST", "EUW", ("FakePlayer#TEST", "EUW"))],  # tag given: not guessed
+)
+def test_split_name_and_tag(name: str, tag: str | None,
+                            expected: tuple[str, str | None]) -> None:
+    assert v.split_name_and_tag(name, tag) == expected
+
+
+def test_validate_account_splits_name_and_tag() -> None:
+    game = make_game()
+    account = make_account(game, display_name="FakePlayer#TEST", tag=None)
+    cleaned = v.validate_account(account, game.template)
+    assert (cleaned.display_name, cleaned.tag) == ("FakePlayer", "TEST")
+    with pytest.raises(ValidationError):  # both filled in: still the user's call
+        v.validate_account(replace(account, tag="EUW"), game.template)

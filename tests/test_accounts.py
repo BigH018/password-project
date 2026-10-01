@@ -179,3 +179,9 @@ def test_duplicates_work_on_unvalidated_drafts(accounts: AccountService, valoran
     half_typed = replace(accounts.new_draft(valorant.id), login_username="TYPING",
                          display_name="has#hash")  # invalid name, still checkable
     assert accounts.find_duplicates(half_typed)
+
+
+def test_add_splits_name_and_tag_typed_together(store: FakeStore, valorant: Game) -> None:
+    service = AccountService(store)
+    stored = service.add(make_account(valorant, display_name="FakePlayer#TEST", tag=None))
+    assert (stored.display_name, stored.tag) == ("FakePlayer", "TEST")

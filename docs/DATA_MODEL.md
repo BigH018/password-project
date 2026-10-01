@@ -32,7 +32,8 @@ Secret fields (and `extra`) use `field(repr=False)`. `Account.__repr__` shows on
 
 Account-level rules (`validate_account`):
 - At least one identifier: `login_username`, `display_name` or `email`.
-- `display_name` must not contain `#`. A `tag` needs a `display_name`.
+- `display_name` must not contain `#`. A `tag` needs a `display_name`. If the tag is empty,
+  `name#tag` typed into the name is split at the last `#` before validation.
 - Secrets are never stripped or normalized. Other text is NFC-normalized and stripped.
 
 Length limits live in `config/constants.py` and `core/game_template.py`. Character rules live

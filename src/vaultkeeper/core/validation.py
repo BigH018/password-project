@@ -64,6 +64,16 @@ def split_tagged_id(text: str) -> tuple[str, str | None]:
     return name.strip(), (tag.strip() or None)
 
 
+def split_name_and_tag(name: str, tag: str | None) -> tuple[str, str | None]:
+    """``name#tag`` typed into the name while the tag is empty -> ``(name, tag)``.
+
+    A tag that is already filled in is never guessed over: the pair is returned unchanged.
+    """
+    if (tag or "").strip() or "#" not in name:
+        return name, tag
+    return split_tagged_id(name)
+
+
 def clean_labels(values: Any) -> tuple[str, ...]:
     """Free-form labels. Trimmed, empties dropped, de-duplicated case-insensitively."""
     if isinstance(values, str) or not isinstance(values, Iterable):
@@ -178,12 +188,15 @@ def validate_account(
         template = GameTemplate() if template.free_text else template_from_preset(template)
     else:
         preset = template.to_preset()
+    name, tag = account.display_name, account.tag
+    if isinstance(name, str) and (tag is None or isinstance(tag, str)):
+        name, tag = split_name_and_tag(name, tag)
     cleaned = replace(
         account,
         id=clean_uuid(account.id, "id"),
         game_id=clean_uuid(account.game_id, "game_id"),
-        display_name=clean_display_name(account.display_name),
-        tag=clean_tag(account.tag),
+        display_name=clean_display_name(name),
+        tag=clean_tag(tag),
         login_username=clean_text(account.login_username, "login_username", c.MAX_LOGIN),
         password=clean_secret(account.password, "password"),
         email=clean_email(account.email, "email"),
