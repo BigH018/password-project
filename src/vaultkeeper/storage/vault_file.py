@@ -17,10 +17,11 @@ from __future__ import annotations
 import contextlib
 import os
 import shutil
+import stat
 import sys
 import time
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePath, PureWindowsPath
 
 from vaultkeeper.errors import VaultFormatError, VaultIOError, VaultKeeperError
 
@@ -29,6 +30,10 @@ REPLACE_RETRIES = 5
 REPLACE_RETRY_DELAY = 0.05  # seconds; Windows can briefly lock files (antivirus, indexer)
 
 Verifier = Callable[[bytes], None]
+# Temp files are always NEW files: O_EXCL never opens (or writes through) anything that is
+# already there, such as a planted symlink (SEC-Low7). O_NOFOLLOW where the OS has it.
+_NEW_FILE = (os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+             | getattr(os, "O_NOFOLLOW", 0))
 
 
 def tmp_path(path: Path) -> Path:
@@ -70,8 +75,9 @@ def read_vault_bytes(path: Path) -> bytes:
 
 
 def _write_and_sync(path: Path, data: bytes) -> None:
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_BINARY", 0)
-    fd = os.open(path, flags, 0o600)
+    """Write ``data`` to a NEW temp file (a leftover is removed first) and fsync it."""
+    _remove_quietly(path)  # unlinking a symlink removes the link, never its target
+    fd = os.open(path, _NEW_FILE, 0o600)
     with os.fdopen(fd, "wb") as fh:
         fh.write(data)
         fh.flush()
@@ -108,9 +114,8 @@ def _keep_previous_version(path: Path) -> None:
     if not path.exists():
         return
     staging = _backup_tmp_path(path)
-    shutil.copyfile(path, staging)
-    with open(staging, "rb+") as fh:
-        os.fsync(fh.fileno())
+    _remove_quietly(staging)
+    _copy_to_new_file(path, staging)  # exclusive create + fsync
     _replace(staging, backup_path(path))
 
 
@@ -174,6 +179,38 @@ def _undo_failed_write(path: Path, quarantined: Path | None) -> None:
     _remove_quietly(_backup_tmp_path(path))
     if quarantined is not None:
         _remove_quietly(quarantined)
+
+
+def _public_folder() -> Path | None:
+    public = os.environ.get("PUBLIC")  # the shared Public folder on Windows
+    return Path(public) if public else None
+
+
+def folder_may_be_shared(
+    path: Path,
+    platform: str = sys.platform,
+    public: Path | None = None,
+    mode_of: Callable[[Path], int] = lambda p: p.stat().st_mode,
+) -> bool:
+    """Heuristic (SEC-Low7): could other users of this PC change files in the vault's folder?
+
+    Windows: a drive root or a folder directly below it (e.g. ``C:\\Vaults``, which by default
+    lets every signed-in user create and change files; a USB stick often has no permissions at
+    all), or the shared Public folder. Folders inside a user profile are private by default.
+    Elsewhere: the folder is group- or world-writable. Used for a warning only, never to block.
+    """
+    if platform == "win32":
+        folder: PurePath = PureWindowsPath(str(path)).parent
+        anchor = PureWindowsPath(folder.anchor)
+        shared_public = public if public is not None else _public_folder()
+        in_public = shared_public is not None and folder.is_relative_to(
+            PureWindowsPath(str(shared_public)))
+        return folder == anchor or folder.parent == anchor or in_public
+    try:
+        mode = mode_of(path.parent)
+    except OSError:
+        return False
+    return bool(mode & (stat.S_IWGRP | stat.S_IWOTH))
 
 
 def cleanup_stale_temp_files(path: Path) -> None:

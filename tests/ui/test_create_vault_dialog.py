@@ -95,3 +95,21 @@ def test_closing_while_creating_writes_nothing(qtbot: Any, make_qt_service: Fact
     gate.release()
     qtbot.wait(400)
     assert not target.exists()
+
+
+
+def test_shared_folder_warning_follows_the_path(qtbot: Any, make_qt_service: Factory,
+                                                qt_runner: QtTaskRunner, tmp_path: Path,
+                                                monkeypatch: Any) -> None:
+    """SEC-Low7: a warning (never a block) for folders other users may be able to change."""
+    from vaultkeeper.ui import create_vault_dialog
+
+    monkeypatch.setattr(create_vault_dialog, "shared_folder_risk",
+                        lambda path: "Shared" in str(path))
+    dialog = _dialog(qtbot, make_qt_service, qt_runner, tmp_path / "Private" / "fake.vault")
+    assert dialog.folder_warning.isHidden()
+    dialog.path_edit.setText(str(tmp_path / "Shared" / "fake.vault"))
+    assert not dialog.folder_warning.isHidden()
+    assert "other users" in dialog.folder_warning.text().lower()
+    dialog.path_edit.setText(str(tmp_path / "Private" / "fake.vault"))
+    assert dialog.folder_warning.isHidden()

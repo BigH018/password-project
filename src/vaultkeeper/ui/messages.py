@@ -123,3 +123,8 @@ def run_modal(dialog: QDialog) -> int:
         return dialog.exec_()
     finally:
         dialog.deleteLater()
+
+
+SHARED_FOLDER = (
+    "Other users of this PC may be able to change files in this folder. A folder inside your "
+    "own user profile (such as Documents) is safer.")

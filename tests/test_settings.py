@@ -189,3 +189,29 @@ def test_invalid_vault_last_saved_is_ignored(bad: object) -> None:
     assert settings_from_dict({"vault_last_saved": bad}).vault_last_saved == {}
     with pytest.raises(ValidationError):
         update_settings(Settings(), vault_last_saved=bad)
+
+
+# --- SEC-Low7: the settings temp file is created exclusively --------------------------------
+
+
+def test_settings_temp_file_is_created_exclusively(tmp_path: Path,
+                                                   monkeypatch: pytest.MonkeyPatch) -> None:
+    import os
+
+    from vaultkeeper.config import settings as settings_module
+
+    real = os.open
+    flags_seen: list[int] = []
+
+    def spy(path: object, flags: int, *args: object) -> int:
+        flags_seen.append(flags)
+        return real(path, flags, *args)
+
+    monkeypatch.setattr(settings_module.os, "open", spy)
+    path = tmp_path / "settings.json"
+    path.with_name("settings.json.tmp").write_text("stale", encoding="utf-8")
+    save_settings(path, Settings(autolock_minutes=7))
+    assert flags_seen and all(f & os.O_EXCL for f in flags_seen)
+    assert load_settings(path).autolock_minutes == 7
+    assert not path.with_name("settings.json.tmp").exists()
+

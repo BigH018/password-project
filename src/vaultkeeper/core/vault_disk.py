@@ -102,3 +102,9 @@ def remember_saved_at(seen: dict[str, str], path: Path, updated_at: str) -> dict
     updated = {k: v for k, v in seen.items() if k != key}
     updated[key] = updated_at
     return dict(list(updated.items())[-c.MAX_REMEMBERED_VAULTS:])
+
+
+def shared_folder_risk(path: Path) -> bool:
+    """Whether other users of this PC may be able to change files in the vault's folder
+    (a warning only; see ``storage.vault_file.folder_may_be_shared``)."""
+    return vault_file.folder_may_be_shared(path)

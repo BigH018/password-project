@@ -239,6 +239,8 @@ No custom cryptography is used anywhere. The full byte layout is documented in
 - Argon2 runs on a background thread, so the window never freezes.
 - **Only one running copy can open a vault**, and a save is refused if the file was changed
   by something else since you unlocked, so two copies can never overwrite each other.
+- **Warns about shared folders:** if other users of the PC could change files where the vault
+  is (for example directly under `C:\`), the create and unlock screens say so.
 - **"Last saved" on unlock**, and a warning if the vault file is older than the version this
   PC last saw (for example an old copy put back by a sync tool).
 

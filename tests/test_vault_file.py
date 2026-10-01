@@ -80,7 +80,7 @@ def test_backup_copy_failure(existing: Path, monkeypatch: pytest.MonkeyPatch) ->
     def fail(*_a: object) -> None:
         raise OSError("copy failed")
 
-    monkeypatch.setattr(vf.shutil, "copyfile", fail)
+    monkeypatch.setattr(vf.shutil, "copyfileobj", fail)
     with pytest.raises(VaultIOError):
         vf.write_vault_atomic(existing, NEW, ok)
     assert existing.read_bytes() == OLD
@@ -246,3 +246,83 @@ def test_quarantine_copy_never_overwrites_an_existing_file(existing: Path) -> No
         vf.write_vault_atomic(existing, NEW, ok, quarantine_as=target)
     assert target.read_bytes() == b"earlier damaged copy"
     assert existing.read_bytes() == b"second"
+
+
+# --- SEC-Low7: temp files are created exclusively, never written through a link -----------
+
+
+def _record_open_flags(monkeypatch: pytest.MonkeyPatch, module: object) -> list[int]:
+    real = os.open
+    flags_seen: list[int] = []
+
+    def spy(path: object, flags: int, *args: object) -> int:
+        flags_seen.append(flags)
+        return real(path, flags, *args)
+
+    monkeypatch.setattr(module.os, "open", spy)  # type: ignore[attr-defined]
+    return flags_seen
+
+
+def test_temp_files_are_opened_exclusively(existing: Path,
+                                           monkeypatch: pytest.MonkeyPatch) -> None:
+    flags_seen = _record_open_flags(monkeypatch, vf)
+    vf.tmp_path(existing).write_bytes(b"stale leftover")  # an earlier crash left one
+    vf.write_vault_atomic(existing, NEW, ok)
+    writes = [f for f in flags_seen if f & os.O_CREAT]
+    assert writes and all(f & os.O_EXCL for f in writes)
+    assert existing.read_bytes() == NEW and vf.backup_path(existing).read_bytes() == OLD
+
+
+def test_backup_staging_file_is_created_exclusively(existing: Path,
+                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    import builtins
+
+    real_open = builtins.open
+    modes: list[str] = []
+
+    def spy(file: object, mode: str = "r", *args: object, **kwargs: object) -> object:
+        if str(file).endswith(".bak.tmp"):
+            modes.append(mode)
+        return real_open(file, mode, *args, **kwargs)  # type: ignore[call-overload]
+
+    monkeypatch.setattr(builtins, "open", spy)
+    monkeypatch.setattr(vf.shutil, "copyfile", lambda *_a: pytest.fail("follows links"))
+    vf.write_vault_atomic(existing, NEW, ok)
+    assert modes and all("x" in m for m in modes if "w" in m or "x" in m)
+
+
+def test_a_planted_link_is_never_written_through(existing: Path, tmp_path: Path) -> None:
+    victim = tmp_path / "victim.txt"
+    victim.write_bytes(b"precious")
+    try:
+        vf.tmp_path(existing).symlink_to(victim)
+    except OSError:
+        pytest.skip("creating symlinks needs extra rights on this system")
+    vf.write_vault_atomic(existing, NEW, ok)
+    assert victim.read_bytes() == b"precious"
+    assert existing.read_bytes() == NEW
+
+
+
+# --- SEC-Low7: warn when other users of the PC may be able to write to the vault's folder --
+
+
+@pytest.mark.parametrize(
+    ("vault", "shared"),
+    [("C:/fake.vault", True),  # drive root
+     ("C:/Vaults/fake.vault", True),  # one level below: inherits "any signed-in user: write"
+     ("E:/fake.vault", True),  # USB stick root (often no permissions at all)
+     ("C:/Users/Public/Documents/fake.vault", True),
+     ("C:/Users/FakeUser/Documents/VaultKeeper/fake.vault", False),
+     ("D:/Games/Accounts/fake.vault", False)],
+)
+def test_shared_folder_heuristic_on_windows(vault: str, shared: bool) -> None:
+    assert vf.folder_may_be_shared(Path(vault), platform="win32",
+                                   public=Path("C:/Users/Public")) is shared
+
+
+@pytest.mark.parametrize(("mode", "shared"), [(0o40700, False), (0o40755, False),
+                                              (0o40775, True), (0o40777, True)])
+def test_shared_folder_heuristic_on_posix(tmp_path: Path, mode: int, shared: bool) -> None:
+    assert vf.folder_may_be_shared(tmp_path / "fake.vault", platform="linux",
+                                   mode_of=lambda _p: mode) is shared

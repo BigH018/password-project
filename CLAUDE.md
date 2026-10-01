@@ -165,7 +165,7 @@ vaultkeeper/                       repo root
                                    .bak; on_saved listeners (backups)
       vault_disk.py                file on disk vs session: digest, verifier, quarantine_target
                                    (damaged -> .damaged copy; changed elsewhere -> VaultConflictError);
-                                   went_back_in_time / remember_saved_at (SEC-M3)
+                                   went_back_in_time / remember_saved_at (SEC-M3); shared_folder_risk
       account_service.py           account CRUD + duplicate detection (warning only)
       game_service.py              add (starter/template) / rename / set_template (never blocked) / delete
       search.py                    AccountFilter, free-text search (never secrets), facets, rank sort key
@@ -182,7 +182,8 @@ vaultkeeper/                       repo root
       envelope.py                  seal/open: header (as AAD) + nonce + ciphertext
     storage/
       vault_file.py                atomic write, verify-before-replace, .bak retention, .damaged
-                                   quarantine, write_bytes_atomic / copy_file_verified (backups, exports)
+                                   quarantine, write_bytes_atomic / copy_file_verified (backups, exports);
+                                   temp files created exclusively (O_EXCL); folder_may_be_shared
     security/
       clipboard.py                 ClipboardGuard: copy + auto-clear only if unchanged
       autolock.py                  InactivityTracker: timeout, Quick Add override (injected clock)
@@ -464,6 +465,10 @@ python -m vaultkeeper  # run the app
   dialog runs through `messages.run_modal` (architecture test), the context menu deletes
   itself and drops its "Copy <secret field>" actions. Test fakes need a no-op
   `deleteLater`.
+- Temp files (vault, .bak staging, settings) are created exclusively (SEC-Low7). The create
+  and unlock dialogs show a warning (never a block) if other users may be able to change
+  files in the vault's folder: on Windows a drive root, one level below it (e.g. C:\Vaults)
+  or the Public folder; elsewhere a group/world-writable folder.
 - Rollback notice (SEC-M3): after unlock the status bar shows "Last saved: <time>". Settings
   keep the last `updated_at` seen per vault path (timestamps only, max 20 vaults). If a vault
   opens OLDER than that (not when opened from `.bak`), a warning says it may be an old copy
@@ -648,7 +653,7 @@ Group 4 (in progress): input and key-derivation hardening
       for emoji: tell the user); tests for LRM, RLM, ZWSP, word joiner, soft hyphen, tag chars
 - [x] 16 SEC-Low4/5 Argon2 HashingError (e.g. low memory) -> clear VaultKeeperError; lone
       surrogates (UnicodeEncodeError) in kdf.py -> VaultAuthError without echoing the char
-- [ ] 17 SEC-Low7 temp files opened exclusively (O_EXCL, no symlink following) in
+- [x] 17 SEC-Low7 temp files opened exclusively (O_EXCL, no symlink following) in
       vault_file.py and the settings writer; warn (don't block) at create/open if the folder
       looks writable by other users (e.g. directly under C:\)
 - [ ] 18 SEC-Low6 "Show passwords" switches off after a configurable timeout (default 30 s)

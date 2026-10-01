@@ -106,6 +106,9 @@ newer versions. Migrations live in `core/migrations.py` as `migrate_vN_to_vN+1`,
 ## Atomic save procedure (`storage/vault_file.py`)
 
 1. Write the new bytes to `<vault>.tmp` in the same directory, then `flush()` and `os.fsync()`.
+   Every temp file (`.tmp`, `.bak.tmp`, the settings `.tmp`) is a NEW file: a leftover is
+   removed first and the file is created with `O_EXCL` (plus `O_NOFOLLOW` where available),
+   so a planted symlink is never written through.
 2. **Verify:** read `<vault>.tmp` back, parse the header, decrypt with the current key, and parse
    the JSON payload. If anything fails, delete the tmp file, raise, and leave the vault untouched.
 3. If `<vault>` exists: copy it to `<vault>.bak.tmp`, fsync, then `os.replace` it to `<vault>.bak`.

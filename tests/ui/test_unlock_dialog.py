@@ -194,3 +194,15 @@ def test_low_memory_shows_a_friendly_message(qtbot: Any, existing_vault: Path,
     qtbot.waitUntil(lambda: bool(dialog.error_label.text()), timeout=5000)
     assert "memory" in dialog.error_label.text() and dialog.error_label.text() != AUTH_FAILED
     assert dialog.isVisible()
+
+
+
+@pytest.mark.parametrize("shared", [True, False])
+def test_shared_folder_warning_on_unlock(qtbot: Any, existing_vault: Path,
+                                         make_qt_service: Factory, qt_runner: QtTaskRunner,
+                                         monkeypatch: pytest.MonkeyPatch, shared: bool) -> None:
+    from vaultkeeper.ui import unlock_dialog
+
+    monkeypatch.setattr(unlock_dialog, "shared_folder_risk", lambda _path: shared)
+    dialog = _dialog(qtbot, make_qt_service(), qt_runner)
+    assert dialog.folder_warning.isHidden() is not shared

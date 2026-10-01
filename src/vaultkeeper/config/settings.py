@@ -28,6 +28,7 @@ MAX_PATH_LENGTH = 4096
 MAX_GEOMETRY_LENGTH = 2048
 MAX_TIMESTAMP_LENGTH = 40
 _BASE64_CHARS = frozenset(string.ascii_letters + string.digits + "+/=")
+_NEW_FILE = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,7 +164,9 @@ def save_settings(path: Path, settings: Settings) -> None:
     tmp = path.with_name(path.name + ".tmp")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(tmp, "w", encoding="utf-8") as fh:
+        tmp.unlink(missing_ok=True)  # a leftover (or planted link) is removed, never followed
+        fd = os.open(tmp, _NEW_FILE, 0o600)  # exclusive: never writes through a link
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(data)
             fh.flush()
             os.fsync(fh.fileno())

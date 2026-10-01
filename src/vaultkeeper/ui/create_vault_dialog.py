@@ -20,11 +20,12 @@ from PyQt5.QtWidgets import (
 
 from vaultkeeper.config.constants import VAULT_EXTENSION
 from vaultkeeper.core.password_policy import check_master_password
+from vaultkeeper.core.vault_disk import shared_folder_risk
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import WeakPasswordError
-from vaultkeeper.ui.messages import error_text
+from vaultkeeper.ui.messages import SHARED_FOLDER, error_text
 from vaultkeeper.ui.safe_text import plain_label
-from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
+from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE, WARNING_BANNER_STYLE
 from vaultkeeper.ui.widgets.secret_field import SecretField
 from vaultkeeper.ui.widgets.strength_meter import StrengthMeter
 
@@ -73,6 +74,9 @@ class CreateVaultDialog(QDialog):
             "it somewhere safe and offline.", self)
         warning.setWordWrap(True)
         warning.setStyleSheet(MUTED_STYLE)
+        self.folder_warning = plain_label(SHARED_FOLDER, self)  # a warning, never a block
+        self.folder_warning.setWordWrap(True)
+        self.folder_warning.setStyleSheet(WARNING_BANNER_STYLE)
         self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.error_label.setWordWrap(True)
@@ -98,15 +102,18 @@ class CreateVaultDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(warning)
+        layout.addWidget(self.folder_warning)
         layout.addWidget(self.error_label)
         layout.addWidget(self.busy_bar)
         layout.addLayout(buttons)
 
         self.password.textChanged.connect(self.meter.update_for)
         self.browse_button.clicked.connect(self._browse)
+        self.path_edit.textChanged.connect(self._update_folder_warning)
         self.create_button.clicked.connect(self._start)
         self.confirm.returnPressed.connect(self._start)
         self.cancel_button.clicked.connect(self.reject)
+        self._update_folder_warning()
         self.password.setFocus()
 
     @property
@@ -120,6 +127,10 @@ class CreateVaultDialog(QDialog):
                        self.create_button):
             widget.setEnabled(not busy)
         self.busy_bar.setVisible(busy)
+
+    def _update_folder_warning(self) -> None:
+        text = self.path_edit.text().strip()
+        self.folder_warning.setVisible(bool(text) and shared_folder_risk(Path(text)))
 
     def _browse(self) -> None:
         chosen = self._choose_path(self, self.path_edit.text())

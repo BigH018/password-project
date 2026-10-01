@@ -22,13 +22,18 @@ from PyQt5.QtWidgets import (
 
 from vaultkeeper.config.constants import WINDOW_TITLE
 from vaultkeeper.config.settings import SettingsFile
-from vaultkeeper.core.vault_disk import remember_saved_at, vault_key, went_back_in_time
+from vaultkeeper.core.vault_disk import (
+    remember_saved_at,
+    shared_folder_risk,
+    vault_key,
+    went_back_in_time,
+)
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.errors import VaultAuthError, VaultFormatError
 from vaultkeeper.ui import messages
-from vaultkeeper.ui.messages import error_text, local_time_text
+from vaultkeeper.ui.messages import SHARED_FOLDER, error_text, local_time_text
 from vaultkeeper.ui.safe_text import plain_label
-from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
+from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE, WARNING_BANNER_STYLE
 from vaultkeeper.ui.welcome_dialog import FileChooser, choose_vault_file
 from vaultkeeper.ui.widgets.secret_field import SecretField
 
@@ -64,6 +69,10 @@ class UnlockDialog(QDialog):
         self.path_label = plain_label(f"Vault: {service.path}", self)
         self.path_label.setStyleSheet(MUTED_STYLE)
         self.path_label.setWordWrap(True)
+        self.folder_warning = plain_label(SHARED_FOLDER, self)  # a warning, never a block
+        self.folder_warning.setWordWrap(True)
+        self.folder_warning.setStyleSheet(WARNING_BANNER_STYLE)
+        self.folder_warning.setVisible(shared_folder_risk(service.path))
         self.password = SecretField("Master password", self)
         self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
@@ -99,6 +108,7 @@ class UnlockDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(plain_label("Enter your master password to unlock the vault.", self))
         layout.addWidget(self.path_label)
+        layout.addWidget(self.folder_warning)
         layout.addWidget(self.password)
         layout.addWidget(self.error_label)
         layout.addWidget(self.busy_bar)
