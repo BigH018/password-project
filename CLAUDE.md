@@ -218,7 +218,8 @@ vaultkeeper/                       repo root
       safe_text.py                 plain_label / message_box (Qt.PlainText: user data is never
                                    rendered as HTML), link_label for fixed app text only
       messages.py                  generic error texts (error_text, FIELD_LABELS = on-screen field
-                                   names) + confirm/error boxes
+                                   names) + confirm/error boxes + run_modal (exec_ then
+                                   deleteLater: closed dialogs never linger)
       error_dialog.py              ErrorReporter: "Something went wrong" notice for uncaught errors
                                    (queued, any thread, one at a time, Open log folder)
       widgets/
@@ -244,7 +245,8 @@ vaultkeeper/                       repo root
                                    SessionGuard shutdown + gc after each test
     fake_data.py                   obviously fake games/accounts
     test_architecture.py           AST scan: no PyQt5 in headless layers, no forbidden calls/imports,
-                                   labels/message boxes only via ui/safe_text.py
+                                   labels/message boxes only via ui/safe_text.py, dialogs
+                                   only via messages.run_modal
     test_no_network.py             flows run with sockets blocked
     test_models.py                 model invariants, repr hides secrets
     test_serialization.py          round trip, schema version, malformed input
@@ -279,6 +281,7 @@ vaultkeeper/                       repo root
                                    test_error_dialog (notice, threads, field labels complete),
                                    test_plain_text (HTML-looking user data shown literally),
                                    test_account_form (name#tag split on focus-out),
+                                   test_cleanup (menus, boxes, dialogs deleted after use),
                                    test_secret_field (clear() wipes undo in all password dialogs)
 ```
 
@@ -449,6 +452,10 @@ python -m vaultkeeper  # run the app
 - After a master-password change (CR-M1/SEC-M1): `.bak` is re-saved under the new password,
   a backup is made at once, and the user is offered to delete backups that still open with the
   old password (found by header salt; only offered once a new-password backup exists).
+- Closed dialogs, message boxes and context menus are deleted after use (CR-M4): every
+  dialog runs through `messages.run_modal` (architecture test), the context menu deletes
+  itself and drops its "Copy <secret field>" actions. Test fakes need a no-op
+  `deleteLater`.
 - Two running copies (SEC-M2): the controller takes `<vault>.lock` (QLockFile, stale only when
   the owner process is gone) before the unlock prompt and keeps it until quit; a second copy
   gets "already open" and the welcome screen. Backstop: a save is refused
@@ -608,7 +615,7 @@ Group 3 (next): entry workflow and lock rule
       list; "not in list" values are kept only for the account's own stored game
 - [x] 10 CR-M3 Tag empty + Name contains name#tag -> split with split_tagged_id (focus-out
       or save)
-- [ ] 11 CR-M4 deleteLater() on context menus after exec_() (copy_actions.py) and on the
+- [x] 11 CR-M4 deleteLater() on context menus after exec_() (copy_actions.py) and on the
       QMessageBox in messages.py (nothing holding secrets survives a lock); test menus deleted
 - [ ] 12 CR-L1 backup rotation sorts by parsed timestamp + counter, not file name
       (same-second backups)

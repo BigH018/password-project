@@ -210,6 +210,9 @@ def test_account_form_generate_fills_password(qtbot: Any, unlocked: VaultService
         def __init__(self, **_kw: Any) -> None:
             self.password = "Generated-Fake-Pass-77"
 
+        def deleteLater(self) -> None:  # noqa: N802 - Qt API (run_modal)
+            pass
+
         def exec_(self) -> int:
             return 1
 

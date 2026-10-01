@@ -76,6 +76,9 @@ def _controller(qtbot: Any, settings_file: Path, monkeypatch: Any, accept: bool,
         def __init__(self, _settings: Settings, _open_backups: Any, parent: Any) -> None:
             pass
 
+        def deleteLater(self) -> None:  # noqa: N802 - Qt API (run_modal)
+            pass
+
         def exec_(self) -> int:
             return int(accept)
 

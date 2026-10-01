@@ -26,6 +26,7 @@ from vaultkeeper.core.game_template import CustomField, FieldKind, GameTemplate
 from vaultkeeper.core.models import Account, Game, Rank
 from vaultkeeper.core.validation import split_name_and_tag
 from vaultkeeper.ui.generator_dialog import GeneratorDialog
+from vaultkeeper.ui.messages import run_modal
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.widgets.rank_picker import NOT_IN_LIST, RankPicker, RegionPicker
 from vaultkeeper.ui.widgets.secret_field import SecretField
@@ -128,7 +129,7 @@ class AccountForm(QWidget):
 
     def _generate_password(self) -> None:
         dialog = GeneratorDialog(allow_use=True, parent=self)
-        if dialog.exec_() and dialog.password:
+        if run_modal(dialog) and dialog.password:
             self.password.setText(dialog.password)
 
     # --- game / template --------------------------------------------------------------------

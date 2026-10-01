@@ -80,6 +80,9 @@ def controller(qtbot: Any, tmp_path: Path, monkeypatch: Any) -> app_controller.A
             self.state = state
             seen.append(state)
 
+        def deleteLater(self) -> None:  # noqa: N802 - Qt API (run_modal)
+            pass
+
         def exec_(self) -> int:
             self.service.unlock(demo.DEMO_PASSWORD)
             return 1

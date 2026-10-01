@@ -108,6 +108,9 @@ def test_controller_backs_up_after_password_change(qtbot: Any, tmp_path: Path,
         def __init__(self, service: VaultService, *_a: Any) -> None:
             self.service = service
 
+        def deleteLater(self) -> None:  # noqa: N802 - Qt API (run_modal)
+            pass
+
         def exec_(self) -> int:
             self.service.change_password(MASTER, OTHER_MASTER)
             return 1

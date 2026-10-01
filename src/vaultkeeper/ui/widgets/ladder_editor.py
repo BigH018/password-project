@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import (
 )
 
 from vaultkeeper.core.game_template import MAX_DIVISIONS, GameTemplate, TierDef
+from vaultkeeper.ui.messages import run_modal
 from vaultkeeper.ui.widgets.add_rank_dialog import AddRankDialog
 
 
@@ -74,7 +75,7 @@ class LadderEditor(QWidget):
     def open_add_dialog(self) -> AddRankDialog:
         """Open the quick add form (name + divisions yes/no + how many)."""
         dialog = AddRankDialog(self.add_tier, [t.name for t in self.tiers()], self)
-        dialog.exec_()
+        run_modal(dialog)
         return dialog
 
     def _remove(self) -> None:

@@ -27,7 +27,7 @@ from vaultkeeper.ui.change_password_dialog import ChangePasswordDialog
 from vaultkeeper.ui.create_vault_dialog import CreateVaultDialog
 from vaultkeeper.ui.export_dialog import ExportDialog
 from vaultkeeper.ui.main_window import MainWindow
-from vaultkeeper.ui.messages import error_text
+from vaultkeeper.ui.messages import error_text, run_modal
 from vaultkeeper.ui.qt_adapters import QtTaskRunner, VaultInstanceLock
 from vaultkeeper.ui.session_guard import SessionGuard
 from vaultkeeper.ui.settings_dialog import SettingsDialog
@@ -104,7 +104,7 @@ class AppController(QObject):
 
     def _welcome(self) -> None:
         dialog = WelcomeDialog(parent=None)
-        if not dialog.exec_() or dialog.choice is None:
+        if not run_modal(dialog) or dialog.choice is None:
             self.quit()
             return
         if dialog.choice == "create":
@@ -122,7 +122,7 @@ class AppController(QObject):
         dialog = CreateVaultDialog(
             self._factory, self._runner.cancel_pending, suggested, parent=None
         )
-        if dialog.exec_() and dialog.service is not None:
+        if run_modal(dialog) and dialog.service is not None:
             self.service = dialog.service
             self._instance_lock.acquire(self.service.path)
             self._remember_vault(self.service.path)
@@ -143,7 +143,7 @@ class AppController(QObject):
         if self._unlock_minimized:  # locked by minimizing: wait on the taskbar, don't pop up
             self._unlock_minimized = False
             dialog.setWindowState(Qt.WindowMinimized)
-        if dialog.exec_():
+        if run_modal(dialog):
             self._remember_vault(self.service.path)
             self._show_unlocked()
         elif dialog.other_vault_path is not None:
@@ -216,7 +216,7 @@ class AppController(QObject):
         if self.backups is None:
             return
         dialog = BackupDialog(self.backups, parent=self.window)
-        if dialog.exec_():
+        if run_modal(dialog):
             folder = self.backups.backup_dir
             self.settings.update(backup_dir=str(folder) if folder else None,
                                  backup_keep=self.backups.keep,
@@ -233,7 +233,7 @@ class AppController(QObject):
         dialog = ExportDialog(dumps_payload(self.service.data), self.service.path,
                               self._runner, self._runner.cancel_pending, default,
                               parent=self.window)
-        if dialog.exec_() and dialog.written_path is not None:
+        if run_modal(dialog) and dialog.written_path is not None:
             self.window.statusBar().showMessage("Encrypted export saved.", 6000)
 
     # --- actions ----------------------------------------------------------------------------
@@ -242,7 +242,7 @@ class AppController(QObject):
         if self.service is None or not self.service.is_unlocked:
             return
         dialog = ChangePasswordDialog(self.service, self._runner.cancel_pending, self.window)
-        if dialog.exec_():
+        if run_modal(dialog):
             self.window.banner.setVisible(self.service.opened_from_backup)
             note = after_password_change(self.window, self.backups) if self.backups else ""
             self._backup_status_changed()
@@ -259,7 +259,7 @@ class AppController(QObject):
         """Edit timeouts / lock switches; saved and applied at once (Backups has its own)."""
         open_backups = self._backup_settings if self.backups is not None else None
         dialog = SettingsDialog(self.settings.current, open_backups, parent=self.window)
-        if not dialog.exec_():
+        if not run_modal(dialog):
             return
         # Merged into the current settings: the Backups dialog may have changed them meanwhile.
         saved = self.settings.update(**dialog.values())

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PyQt5.QtWidgets import QMessageBox, QWidget
+from PyQt5.QtWidgets import QDialog, QMessageBox, QWidget
 
 from vaultkeeper.errors import (
     ValidationError,
@@ -96,8 +96,7 @@ def local_time_text(iso: str) -> str:
 
 def show_error(parent: QWidget | None, title: str, text: str) -> None:
     """Modal error box (plain text: ``text`` may name the user's data)."""
-    box = message_box(QMessageBox.Critical, title, text, QMessageBox.Ok, parent)
-    box.exec_()
+    run_modal(message_box(QMessageBox.Critical, title, text, QMessageBox.Ok, parent))
 
 
 def confirm(parent: QWidget | None, title: str, text: str, ok_text: str = "OK") -> bool:
@@ -105,5 +104,17 @@ def confirm(parent: QWidget | None, title: str, text: str, ok_text: str = "OK") 
     box = message_box(QMessageBox.Question, title, text, QMessageBox.Cancel, parent)
     ok = box.addButton(ok_text, QMessageBox.AcceptRole)
     box.setDefaultButton(QMessageBox.Cancel)
-    box.exec_()
+    run_modal(box)
     return box.clickedButton() is ok
+
+
+def run_modal(dialog: QDialog) -> int:
+    """``exec_()``, then delete the dialog (deferred, so its results can still be read).
+
+    Without this a closed dialog stays alive as a hidden child of its parent, with whatever
+    it showed (a password field, account data) until the app quits (CR-M4).
+    """
+    try:
+        return dialog.exec_()
+    finally:
+        dialog.deleteLater()

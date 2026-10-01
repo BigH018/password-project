@@ -50,6 +50,9 @@ def test_demo_controller_suggests_new_vaults_inside_demo_folder(
             captured.append(suggested)
             self.service = None
 
+        def deleteLater(self) -> None:  # noqa: N802 - Qt API (run_modal)
+            pass
+
         def exec_(self) -> int:
             return 0
 
@@ -105,6 +108,9 @@ def _start_controller(qtbot: Any, tmp_path: Path, monkeypatch: Any) -> tuple[Any
             self.service, self.other_vault_path = service, None
             events.append("unlock prompt")
 
+        def deleteLater(self) -> None:  # noqa: N802 - Qt API (run_modal)
+            pass
+
         def exec_(self) -> int:
             self.service.unlock(MASTER)
             return 1
@@ -113,6 +119,9 @@ def _start_controller(qtbot: Any, tmp_path: Path, monkeypatch: Any) -> tuple[Any
         def __init__(self, *_a: Any, **_k: Any) -> None:
             self.choice, self.path = None, None
             events.append("welcome")
+
+        def deleteLater(self) -> None:  # noqa: N802 - Qt API (run_modal)
+            pass
 
         def exec_(self) -> int:
             return 0

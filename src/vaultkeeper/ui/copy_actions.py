@@ -121,4 +121,9 @@ class CopyActions(QObject):
         if account is None:
             return
         extra = getattr(self._window, "context_extra_actions", lambda: [])()
-        self.build_menu(account, extra).exec_(self._panel.table.viewport().mapToGlobal(pos))
+        menu = self.build_menu(account, extra)
+        try:
+            menu.exec_(self._panel.table.viewport().mapToGlobal(pos))
+        finally:  # the menu's "Copy <secret field>" actions hold the secret values
+            self.extra_menu_actions = []
+            menu.deleteLater()

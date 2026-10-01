@@ -22,7 +22,7 @@ from vaultkeeper.ui.copy_actions import CopyActions
 from vaultkeeper.ui.game_setup_dialog import GameSetupDialog
 from vaultkeeper.ui.generator_dialog import GeneratorDialog
 from vaultkeeper.ui.main_menus import install_toolbar_and_menus
-from vaultkeeper.ui.messages import confirm, error_text, local_time_text, show_error
+from vaultkeeper.ui.messages import confirm, error_text, local_time_text, run_modal, show_error
 from vaultkeeper.ui.quick_add_dialog import QuickAddDialog
 from vaultkeeper.ui.safe_text import link_label, plain_label
 from vaultkeeper.ui.theme import MUTED_STYLE, WARNING_BANNER_STYLE
@@ -211,8 +211,8 @@ class MainWindow(QMainWindow):
         return next((g for g in self._games.list_games() if g.id == game_id), None)
 
     def _open_generator(self) -> None:
-        GeneratorDialog(copy=lambda pw: self.copy.copy_value(pw, "Password"),
-                        parent=self).exec_()
+        run_modal(GeneratorDialog(copy=lambda pw: self.copy.copy_value(pw, "Password"),
+                                  parent=self))
 
     def changeEvent(self, event: QEvent) -> None:
         """Report minimizing (auto-lock on minimize)."""
@@ -244,7 +244,7 @@ class MainWindow(QMainWindow):
             return
         dialog = AccountDialog(self._accounts, games,
                                default_game_id=self.panel.sidebar.current_game_id(), parent=self)
-        if dialog.exec_() and dialog.saved is not None:
+        if run_modal(dialog) and dialog.saved is not None:
             self._after_save(dialog.saved.id)
 
     def _quick_add(self) -> None:
@@ -257,7 +257,7 @@ class MainWindow(QMainWindow):
         dialog.saved_one.connect(lambda acc: self._after_save(acc.id))
         self.quick_add_opened.emit()  # longer auto-lock timeout while it's open
         try:
-            dialog.exec_()
+            run_modal(dialog)
         finally:
             self.quick_add_closed.emit()
 
@@ -267,14 +267,14 @@ class MainWindow(QMainWindow):
             return
         dialog = AccountDialog(self._accounts, self._games.list_games(), account=account,
                                parent=self)
-        if dialog.exec_() and dialog.saved is not None:
+        if run_modal(dialog) and dialog.saved is not None:
             self._after_save(dialog.saved.id)
 
     def _manage_games(self) -> None:
         if self._games is None:
             return
         dialog = GameSetupDialog(self._games, parent=self)
-        dialog.exec_()
+        run_modal(dialog)
         if dialog.changed:
             self._after_save()
 

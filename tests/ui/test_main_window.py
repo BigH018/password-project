@@ -175,6 +175,9 @@ def test_edit_opens_dialog_for_selected_account(window: mw.MainWindow,
                      **_kw: object) -> None:
             opened.append(account)
 
+        def deleteLater(self) -> None:  # noqa: N802 - Qt API (run_modal)
+            pass
+
         def exec_(self) -> int:
             return 0
 

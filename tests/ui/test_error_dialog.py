@@ -31,6 +31,9 @@ class _FakeBox:
     def __init__(self, clicked_text: str) -> None:
         self._text = clicked_text
 
+    def deleteLater(self) -> None:  # noqa: N802 - Qt API (run_modal)
+        pass
+
     def exec_(self) -> int:
         return 0
 

@@ -226,3 +226,15 @@ def test_rich_text_check_catches_risky_code() -> None:
 def test_safe_text_sets_plain_format() -> None:
     source = SAFE_TEXT.read_text(encoding="utf-8")
     assert source.count("setTextFormat(Qt.PlainText)") >= 2
+
+
+# --- CR-M4: closed dialogs never linger (with secrets in their fields) ----------------------
+EXEC_ALLOWED = {UI_DIR / "messages.py", UI_DIR / "copy_actions.py"}  # run_modal, the menu
+
+
+@pytest.mark.parametrize("path", [p for p in UI_FILES if p not in EXEC_ALLOWED], ids=_id)
+def test_dialogs_run_through_run_modal(path: Path) -> None:
+    for node in ast.walk(_parse(path)):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            assert node.func.attr not in ("exec_", "exec"), (
+                f"line {node.lineno}: use messages.run_modal(dialog) (deletes it afterwards)")

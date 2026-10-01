@@ -14,6 +14,7 @@ from PyQt5.QtCore import QObject, Qt, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import QMessageBox, QWidget
 
+from vaultkeeper.ui.messages import run_modal
 from vaultkeeper.ui.safe_text import message_box, set_informative_text
 
 ERROR_TITLE = "Something went wrong"
@@ -47,7 +48,7 @@ def show_error_box(log_folder: Path | None,
                    opener: Callable[[Path], None] = open_folder) -> None:
     """Show the notice modally; open the log folder if asked."""
     box = build_error_box(log_folder)
-    box.exec_()
+    run_modal(box)
     clicked = box.clickedButton()
     if log_folder is not None and clicked is not None and clicked.text() == OPEN_LOGS:
         opener(log_folder)

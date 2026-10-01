@@ -174,6 +174,9 @@ def test_main_window_quick_add_uses_longer_autolock(qtbot: Any, tmp_path: Any,
         def __init__(self, *_a: Any, **_k: Any) -> None:
             self.saved_one = type("S", (), {"connect": lambda *_: None})()
 
+        def deleteLater(self) -> None:  # noqa: N802 - Qt API (run_modal)
+            pass
+
         def exec_(self) -> int:
             timeouts.append(controller.guard.tracker.timeout)
             return 0
