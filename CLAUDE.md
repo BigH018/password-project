@@ -222,7 +222,8 @@ vaultkeeper/                       repo root
         extra_fields_editor.py     extra fields editor: label, type, dropdown options (ids kept)
         rank_picker.py             RankPicker (tier + division) and RegionPicker, driven by the game
                                    template; values not in the list shown marked, never dropped
-        secret_field.py            masked edit with show/hide (copying is done from the table)
+        secret_field.py            masked edit with show/hide; clear() also wipes undo history
+                                   (copying is done from the table)
         strength_meter.py          live master-password strength bar + suggestions
       styles/
         dark.qss                   dark theme (ASCII, no url()/images; package data)
@@ -264,7 +265,8 @@ vaultkeeper/                       repo root
                                    test_settings_dialog (values, defaults, save + apply live),
                                    test_window_geometry (saved on lock/quit, restored at start),
                                    test_error_dialog (notice, threads, field labels complete),
-                                   test_plain_text (HTML-looking user data shown literally)
+                                   test_plain_text (HTML-looking user data shown literally),
+                                   test_secret_field (clear() wipes undo in all password dialogs)
 ```
 
 ---

@@ -1,4 +1,4 @@
-"""Masked text field with a show/hide toggle (copy button arrives with Phase 5)."""
+"""Masked text field with a show/hide toggle (copying is done from the table)."""
 
 from __future__ import annotations
 
@@ -49,6 +49,10 @@ class SecretField(QWidget):
         self.edit.setText(text)
 
     def clear(self) -> None:
-        """Empty the field and mask it again."""
-        self.edit.clear()
+        """Empty the field, wipe its undo history and mask it again.
+
+        QLineEdit.clear() is undoable, so the cleared secret could come back after "Show";
+        setText("") also clears the undo/redo history.
+        """
+        self.edit.setText("")
         self.toggle.setChecked(False)
