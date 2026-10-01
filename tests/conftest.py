@@ -13,6 +13,7 @@ from fake_data import make_vault
 from vaultkeeper.core.models import VaultData
 from vaultkeeper.core.vault_service import VaultService
 from vaultkeeper.crypto.kdf import KdfParams
+from vaultkeeper.errors import VaultIOError
 
 
 class NetworkBlockedError(RuntimeError):
@@ -37,6 +38,28 @@ def block_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 def fake_vault() -> VaultData:
     """A small vault of obviously fake data."""
     return make_vault()
+
+
+class FakeStore:
+    """In-memory VaultStore: counts saves and can be told to fail."""
+
+    def __init__(self, data: VaultData | None = None) -> None:
+        self.data = data if data is not None else VaultData.empty()
+        self.saves = 0
+        self.fail_next_save = False
+
+    def save(self) -> None:
+        if self.fail_next_save:
+            self.fail_next_save = False
+            raise VaultIOError("Simulated save failure.")
+        self.data.updated_at = "2026-10-01T12:00:00+00:00"
+        self.saves += 1
+
+
+@pytest.fixture
+def store() -> FakeStore:
+    """An empty in-memory store."""
+    return FakeStore()
 
 
 # Tiny Argon2 cost so the suite stays fast. Production params run only under -m slow.

@@ -34,7 +34,7 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 |---|---|---|
 | Crypto, KDF, vault format | docs/VAULT_FORMAT.md, crypto/*, storage/vault_file.py, errors.py | scripts/recover_vault.py (must stay in sync with the format); tests/test_header, test_kdf, test_cipher, test_envelope, test_vault_file, test_recover_script |
 | Vault lifecycle (create, unlock, lock, change password) | core/vault_service.py, core/password_policy.py, errors.py, core/serialization.py | crypto/ signatures, tests/test_vault_service.py, test_password_policy.py |
-| Accounts, games, search, duplicates | docs/DATA_MODEL.md, core/models.py, the relevant service (account_service, game_service or search), core/validation.py | matching test file |
+| Accounts, games, search, duplicates | docs/DATA_MODEL.md, core/models.py, the relevant service (account_service, game_service or search), core/store.py, core/validation.py | matching test file, tests/conftest.py (FakeStore) |
 | Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/serialization.py, config/constants.py, tests/test_serialization.py | grep ui/ for the field to see where it is displayed |
 | A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/qt_adapters.py, and signatures of the services it calls | ui/styles/dark.qss for visual work |
 | Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures | tests/test_paste_assist.py, test_entry_session.py |
@@ -134,12 +134,13 @@ vaultkeeper/                       repo root
     core/
       models.py                    dataclasses: Account, Game, Rank, VaultData (no I/O)
       serialization.py             VaultData <-> JSON dict, schema validation, migrations
-      validation.py                input validation/normalization (~280 lines: split before growing)
+      validation.py                input validation/normalization (~290 lines: split before growing)
+      store.py                     VaultStore protocol + apply_change (save or roll back in memory)
       password_policy.py           master password rules (min 12) + strength hint
       vault_service.py             create/unlock/lock/save/change password, TaskRunner (~285 lines)
-      account_service.py      (P)  account CRUD + duplicate detection
-      game_service.py         (P)  add/rename/delete games (delete blocked if accounts exist)
-      search.py               (P)  filter/query engine
+      account_service.py           account CRUD + duplicate detection (warning only)
+      game_service.py              add/rename/set preset/delete games (blocked if accounts exist)
+      search.py                    AccountFilter, free-text search (never secrets), rank sort key
       backup.py               (P)  rotating encrypted backups + "backup now"
       exporter.py             (P)  encrypted export with its own password
       entry_session.py        (P)  Quick Add batch state: sticky fields + session counter
@@ -178,7 +179,7 @@ vaultkeeper/                       repo root
       styles/
         dark.qss              (P)  dark theme
   tests/
-    conftest.py                    fast KDF params, network block (autouse), fake-data fixtures
+    conftest.py                    fast KDF params, network block (autouse), FakeStore, fixtures
     fake_data.py                   obviously fake games/accounts
     test_architecture.py           AST scan: no PyQt5 in headless layers, no forbidden calls/imports
     test_no_network.py             flows run with sockets blocked
@@ -190,7 +191,7 @@ vaultkeeper/                       repo root
     test_logging_setup.py          redaction, exceptions logged without messages
     test_header.py, test_kdf.py, test_cipher.py, test_envelope.py, test_vault_file.py
     test_vault_service.py, test_password_policy.py, test_recover_script.py
-    test_accounts.py, test_games.py, test_search.py                                    (P)
+    test_accounts.py, test_games.py, test_search.py
     test_backup.py, test_exporter.py, test_clipboard.py, test_autolock.py              (P)
     test_generator.py, test_entry_session.py, test_paste_assist.py, test_totp.py      (P)
     ui/                       (P)  pytest-qt smoke tests
@@ -359,19 +360,26 @@ python -m vaultkeeper  # run the app
   session lock, clipboard clear 15 s. All configurable.
 - TOTP stays optional. The user accepts the same-vault trade-off.
 - Settings JSON lives in `%APPDATA%\VaultKeeper\` and holds no secrets.
-- Commit after each approved phase, with plain messages.
+- Commit after each approved phase, with plain messages. Commits use the GitHub noreply
+  address (repo-local `user.email`); earlier commits are left as they are.
 - Rank division is optional (a tier can be stored without one). Loading a vault checks
   structure only, not presets, so preset changes never stop an old vault from opening.
 - An account needs at least one identifier: login username, in-game name or email.
 - `pyproject.toml` reads dependencies from `requirements.txt` (single source of pins).
 - The master password is NFC-normalized before the KDF (the app and the recovery script agree).
 - Master password policy: ≥12 chars, ≥5 distinct chars, not on a small common-password list.
+- Every service change saves immediately and rolls back in memory if the save fails.
+- Free-text search covers notes but never secrets. Tag filters require ALL selected labels.
+- A game's preset change is blocked if any account would become invalid (message gives count).
+- Phase 4 backup UX: show "Try the backup copy" only when a `.bak` exists, worded as "only if
+  you're sure the password is right". It never opens automatically.
+- Phase 5: exports must use the `.vault` extension or live under `exports/` (both gitignored).
 
 ### Status
 - [x] Step 0: CLAUDE.md + plan approved
 - [x] Phase 1: Scaffold, config, models
-- [x] Phase 2: Crypto, storage, vault service, recovery script
-- [ ] Phase 3: Account/game services, search
+- [x] Phase 2: Crypto, storage, vault service, recovery script (pushed 9372fb1)
+- [x] Phase 3: Account/game services, search (awaiting review)
 - [ ] Phase 4: Core UI
 - [ ] Phase 5: Clipboard, auto-lock, generator, export, backups
 - [ ] Phase 6: Quick Add, batch mode, paste assist

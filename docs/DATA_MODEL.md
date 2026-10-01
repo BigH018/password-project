@@ -53,6 +53,10 @@ rejected, except newlines in notes).
 
 - Renaming changes only `name`, because accounts reference `game_id`.
 - Deleting is blocked (`GameInUseError`) while any account references the game.
+- Changing `preset` is blocked (`ValidationError`, message gives the count) if any of the
+  game's accounts would fail validation under the new preset. Accounts are never changed
+  automatically.
+- Moving an account to another game re-validates it against that game's preset.
 
 ## When preset rules apply
 
@@ -73,6 +77,16 @@ fall back to `custom`.
 
 Marvel Rivals regions are UNVERIFIED: broad groups (NA, EU, SA, Asia, OCE, ME) from third-party
 server maps, because no official NetEase list was found (checked 2026-10-01).
+
+## Search (`core/search.py`)
+
+- Filter criteria combine with AND. Status, tier and region match any value in their set.
+  Tags require ALL selected labels. Unranked is matched with `UNRANKED` (None).
+- Free text: every word must appear (ignoring case) in name, tag, Riot ID, login, email,
+  recovery email, notes, region, status, rank tier/division or labels. **Secrets are never
+  searched.**
+- Rank order: Unranked < ladder tiers (no division < lowest division … highest) < unknown or
+  free-text tiers (alphabetical).
 
 ## Duplicate rule
 
