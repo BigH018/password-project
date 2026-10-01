@@ -116,13 +116,12 @@ def test_hard_crash_at_each_step_leaves_old_vault_readable(
             real(*args)  # tmp fully written, then die
         raise SimulatedCrash
 
-    monkeypatch.setattr(vf, step, crash)
-    monkeypatch.setattr(vf, "_remove_quietly", lambda _p: None)
-    with pytest.raises(SimulatedCrash):
+    with monkeypatch.context() as patch, pytest.raises(SimulatedCrash):
+        patch.setattr(vf, step, crash)
+        patch.setattr(vf, "_remove_quietly", lambda _p: None)
         vf.write_vault_atomic(existing, NEW, ok)
     assert existing.read_bytes() == OLD
 
-    monkeypatch.undo()
     vf.cleanup_stale_temp_files(existing)
     assert _leftovers(existing) == []
     assert existing.read_bytes() == OLD
@@ -146,7 +145,7 @@ def test_replace_retries_on_permission_error(
     assert attempts["n"] == 3
 
 
-def test_quarantine_moves_current_aside_and_leaves_bak(existing: Path) -> None:
+def test_quarantine_copies_current_aside_and_leaves_bak(existing: Path) -> None:
     vf.write_vault_atomic(existing, b"second", ok)  # .bak = OLD, vault = second
     target = vf.damaged_path(existing, "20260101-000000")
     vf.write_vault_atomic(existing, NEW, ok, quarantine_as=target)
@@ -191,3 +190,59 @@ def test_read_missing_and_too_large(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(vf, "MAX_VAULT_BYTES", 50)
     with pytest.raises(VaultFormatError):
         vf.read_vault_bytes(big)
+
+
+# --- CR-H1 / SEC-Low8: quarantine mode never leaves the vault missing ----------------------
+
+
+def _quarantine_setup(existing: Path) -> Path:
+    vf.write_vault_atomic(existing, b"second", ok)  # .bak = OLD (good), vault = "second"
+    return vf.damaged_path(existing, "20260101-000000")
+
+
+def _fail_final_replace(monkeypatch: pytest.MonkeyPatch, path: Path,
+                        error: BaseException) -> None:
+    real = vf._replace
+
+    def replace(src: Path, dst: Path) -> None:
+        if src == vf.tmp_path(path) and dst == path:
+            raise error
+        real(src, dst)
+
+    monkeypatch.setattr(vf, "_replace", replace)
+
+
+def test_quarantine_final_replace_failure_keeps_vault_and_bak(
+    existing: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = _quarantine_setup(existing)
+    _fail_final_replace(monkeypatch, existing, OSError("replace failed"))
+    with pytest.raises(VaultIOError):
+        vf.write_vault_atomic(existing, NEW, ok, quarantine_as=target)
+    assert existing.read_bytes() == b"second"  # main file still there, unchanged
+    assert vf.backup_path(existing).read_bytes() == OLD
+    assert not target.exists()  # the half-done quarantine is undone
+    assert _leftovers(existing) == []
+
+
+def test_quarantine_hard_crash_before_final_replace_keeps_main_file(
+    existing: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Process dies after the damaged copy is made but before the new file is in place."""
+    target = _quarantine_setup(existing)
+    with monkeypatch.context() as patch, pytest.raises(SimulatedCrash):
+        _fail_final_replace(patch, existing, SimulatedCrash())
+        patch.setattr(vf, "_remove_quietly", lambda _p: None)
+        vf.write_vault_atomic(existing, NEW, ok, quarantine_as=target)
+    vf.cleanup_stale_temp_files(existing)  # what the next unlock does
+    assert existing.read_bytes() == b"second"
+    assert vf.backup_path(existing).read_bytes() == OLD
+
+
+def test_quarantine_copy_never_overwrites_an_existing_file(existing: Path) -> None:
+    target = _quarantine_setup(existing)
+    target.write_bytes(b"earlier damaged copy")
+    with pytest.raises(VaultIOError):
+        vf.write_vault_atomic(existing, NEW, ok, quarantine_as=target)
+    assert target.read_bytes() == b"earlier damaged copy"
+    assert existing.read_bytes() == b"second"

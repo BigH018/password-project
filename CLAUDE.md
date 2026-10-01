@@ -451,8 +451,8 @@ python -m vaultkeeper  # run the app
 - Phase 4 backup UX: show "Try the backup copy" only when a `.bak` exists, worded as "only if
   you're sure the password is right". It never opens automatically.
 - Exports always use the `.vault` extension (gitignored, like `exports/`).
-- After unlocking from `.bak`, the next save renames the main file to `<vault>.damaged-<time>`
-  and leaves `.bak` untouched (a damaged file never overwrites the good backup).
+- After unlocking from `.bak`, the next save copies the main file to `<vault>.damaged-<time>`
+  (never moves it, so a failed save can't leave the vault missing) and leaves `.bak` untouched (a damaged file never overwrites the good backup).
 - One vault is the normal case. "Create a new vault" is only offered on the first-run Welcome
   screen. The unlock screen has a small "Open a different vault file..." link (for restoring a
   backup or a moved vault) that opens a file picker directly.

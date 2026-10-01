@@ -258,8 +258,8 @@ class VaultService:
     # --- writing ----------------------------------------------------------------------------
 
     def _write(self, session: _Session) -> None:
-        """Seal and write. After opening from ``.bak``, the (damaged) main file is renamed
-        aside instead of being copied over the good ``.bak``."""
+        """Seal and write. After opening from ``.bak``, the (damaged) main file is copied
+        aside instead of over the good ``.bak``. If the write fails, the next save retries."""
         blob = envelope.seal(dumps_payload(session.data), session.key, session.kdf, session.salt)
         quarantine = None
         if self._opened_from_backup and self._path.exists():

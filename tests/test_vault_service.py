@@ -175,6 +175,42 @@ def test_save_after_opening_backup_keeps_good_bak_and_damaged_copy(
     restored.lock()
     make_service().unlock(MASTER)  # main vault is healthy again
 
+
+def test_failed_save_after_opening_backup_keeps_vault_and_retries(
+    make_service: Factory, vault_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CR-H1: the final replace fails while quarantining: nothing is lost, the next save retries."""
+    svc = make_service()
+    svc.create(MASTER)
+    _populate(svc)
+    svc.lock()
+    damaged = bytearray(vault_path.read_bytes())
+    damaged[-1] ^= 0x01
+    vault_path.write_bytes(bytes(damaged))
+    good_bak = svc.backup_path.read_bytes()
+    restored = make_service()
+    restored.unlock(MASTER, use_backup=True)
+
+    real = vault_file._replace
+
+    def failing(src: Path, dst: Path) -> None:
+        if dst == vault_path:
+            raise OSError("disk went away")
+        real(src, dst)
+
+    with monkeypatch.context() as patch, pytest.raises(VaultIOError):
+        patch.setattr(vault_file, "_replace", failing)
+        restored.save()
+    assert vault_path.read_bytes() == bytes(damaged)  # main file still there
+    assert restored.backup_path.read_bytes() == good_bak
+    assert restored.opened_from_backup and restored.last_damaged_copy is None
+    assert not list(vault_path.parent.glob("*.damaged-*"))
+
+    restored.save()  # retry quarantines properly
+    assert restored.last_damaged_copy is not None
+    assert restored.last_damaged_copy.read_bytes() == bytes(damaged)
+    assert restored.backup_path.read_bytes() == good_bak
+
     # Later saves go back to the normal rotation (main -> .bak).
     again = make_service()
     again.unlock(MASTER)
@@ -276,10 +312,9 @@ def test_failed_save_during_change_keeps_old_password(
     def fail(*_a: object, **_kw: object) -> None:
         raise VaultIOError("simulated")
 
-    monkeypatch.setattr(vault_file, "write_vault_atomic", fail)
-    with pytest.raises(VaultIOError):
+    with monkeypatch.context() as patch, pytest.raises(VaultIOError):
+        patch.setattr(vault_file, "write_vault_atomic", fail)
         svc.change_password(MASTER, OTHER_MASTER)
-    monkeypatch.undo()
     svc.save()  # still works with the old key
     svc.lock()
     make_service().unlock(MASTER)

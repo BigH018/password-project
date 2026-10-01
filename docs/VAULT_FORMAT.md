@@ -109,9 +109,13 @@ newer versions. Migrations live in `core/migrations.py` as `migrate_vN_to_vN+1`,
 5. On POSIX, fsync the directory. On startup, remove stale `.tmp` files left by earlier crashes.
 6. If the main file fails to open, the UI *offers* to try `.bak`. It never switches silently.
 7. **After opening from `.bak`**, the next save does NOT do step 3. Instead the current
-   (damaged) main file is renamed to `<vault>.damaged-YYYYMMDD-HHMMSS` (`quarantine_as`), so
-   the good `.bak` is never overwritten by a file that failed to open. Later saves go back to
-   the normal rotation. Test: `test_save_after_opening_backup_keeps_good_bak_and_damaged_copy`.
+   (damaged) main file is COPIED (exclusive create + fsync, never overwriting) to
+   `<vault>.damaged-YYYYMMDD-HHMMSS` (`quarantine_as`), so the good `.bak` is never
+   overwritten by a file that failed to open. The main file is never moved, so a failed or
+   interrupted final replace still leaves it, `.bak` and the damaged copy on disk (a failed
+   save removes its own damaged copy, and the next save tries again). Later saves go back to
+   the normal rotation. Tests: `test_save_after_opening_backup_keeps_good_bak_and_damaged_copy`,
+   `test_failed_save_after_opening_backup_keeps_vault_and_retries`, `test_quarantine_*`.
    Enforced in core: `VaultService.unlock()` only reads `.bak` when called with
    `use_backup=True`, and `has_backup()` lets the UI decide whether to offer it
    (test: `test_damaged_vault_never_falls_back_to_backup`). The UI side is covered by

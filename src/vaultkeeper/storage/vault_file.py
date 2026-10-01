@@ -3,10 +3,12 @@
 Procedure (docs/VAULT_FORMAT.md):
 1. write ``<vault>.tmp``, flush, fsync
 2. read the tmp file back and run the injected ``verify`` callback (decrypt + parse)
-3. copy the current vault to ``<vault>.bak`` (via ``.bak.tmp`` + fsync + replace)
+3. copy the current vault to ``<vault>.bak`` (via ``.bak.tmp`` + fsync + replace), or after
+   opening from ``.bak``, copy it to ``<vault>.damaged-...`` instead (``.bak`` untouched)
 4. ``os.replace(<vault>.tmp, <vault>)``, then fsync the directory (POSIX)
 
-A crash or error at any step leaves either the old or the new vault intact. This module
+The main file is only ever COPIED, never moved, so there is always a file at ``<vault>``:
+a crash or error at any step leaves either the old or the new vault intact. This module
 only handles bytes: it knows nothing about keys or accounts.
 """
 
@@ -112,6 +114,19 @@ def _keep_previous_version(path: Path) -> None:
     _replace(staging, backup_path(path))
 
 
+def _copy_to_new_file(src: Path, dst: Path) -> None:
+    """Copy ``src`` to a NEW file ``dst`` and fsync it. Never overwrites an existing file."""
+    with open(src, "rb") as source, open(dst, "xb") as target:  # "x": exclusive create
+        try:
+            shutil.copyfileobj(source, target)
+            target.flush()
+            os.fsync(target.fileno())
+        except OSError:
+            target.close()
+            _remove_quietly(dst)
+            raise
+
+
 def write_vault_atomic(
     path: Path, data: bytes, verify: Verifier, *, quarantine_as: Path | None = None
 ) -> None:
@@ -121,11 +136,14 @@ def write_vault_atomic(
     VaultKeeperError if they don't decrypt and parse. On any failure, the existing vault is
     untouched and the temp file is removed.
 
-    Normally the current file becomes ``.bak``. With ``quarantine_as`` (used after opening
-    from ``.bak`` because the main file failed), the current file is renamed to that path
-    instead, and ``.bak`` is NOT touched, so a damaged file never replaces the good backup.
+    Normally the current file is copied to ``.bak``. With ``quarantine_as`` (used after
+    opening from ``.bak`` because the main file failed), the current file is copied to that
+    NEW path instead and ``.bak`` is NOT touched, so a damaged file never replaces the good
+    backup. The main file is never moved: if the final replace fails, it is still there
+    (and the quarantine copy is removed again).
     """
     tmp = tmp_path(path)
+    quarantined: Path | None = None
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         _write_and_sync(tmp, data)
@@ -137,17 +155,25 @@ def write_vault_atomic(
         if quarantine_as is None:
             _keep_previous_version(path)
         elif path.exists():
-            _replace(path, quarantine_as)
+            _copy_to_new_file(path, quarantine_as)
+            quarantined = quarantine_as
         _replace(tmp, path)
+        quarantined = None  # the new vault is in place: the damaged copy must stay
         _fsync_dir(path.parent)
     except OSError as exc:
-        _remove_quietly(tmp)
-        _remove_quietly(_backup_tmp_path(path))
+        _undo_failed_write(path, quarantined)
         raise VaultIOError("Could not save the vault file.") from exc
     except BaseException:
-        _remove_quietly(tmp)
-        _remove_quietly(_backup_tmp_path(path))
+        _undo_failed_write(path, quarantined)
         raise
+
+
+def _undo_failed_write(path: Path, quarantined: Path | None) -> None:
+    """Remove what a failed save created. The main file was never moved, so it is intact."""
+    _remove_quietly(tmp_path(path))
+    _remove_quietly(_backup_tmp_path(path))
+    if quarantined is not None:
+        _remove_quietly(quarantined)
 
 
 def cleanup_stale_temp_files(path: Path) -> None:
