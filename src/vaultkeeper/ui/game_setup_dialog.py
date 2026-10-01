@@ -1,7 +1,8 @@
 """Game setup: add games and customise each one's ranks, regions and fields.
 
 Changing a template never deletes account data (GameService.set_template); values that no
-longer fit show as "not in this game's list" on the accounts.
+longer fit show as "not in this game's list" on the accounts. Unsaved edits are never
+discarded silently: switching games or closing asks first (CR-L4).
 """
 
 from __future__ import annotations
@@ -50,6 +51,7 @@ class GameSetupDialog(QDialog):
         super().__init__(parent)
         self._games = games
         self.changed = False
+        self._loaded: tuple[str, GameTemplate] = ("", GameTemplate())  # editor as loaded
         self.setWindowTitle("Game setup")
         self.resize(900, 640)
 
@@ -150,9 +152,29 @@ class GameSetupDialog(QDialog):
                 target = item
         self.list.setCurrentItem(target)
         self.list.blockSignals(False)
-        self._selection_changed()
+        self._show_selected()
 
-    def _selection_changed(self, *_args: object) -> None:
+    @property
+    def has_changes(self) -> bool:
+        """Whether the editor differs from the game as it was loaded (or a blank new game)."""
+        return (self.name.text(), self.template()) != self._loaded
+
+    def _discard_ok(self) -> bool:
+        """True if there's nothing unsaved, or the user agrees to discard it."""
+        return not self.has_changes or messages.confirm(
+            self, "Discard changes?", "This game has unsaved changes. Discard them?",
+            ok_text="Discard")
+
+    def _selection_changed(self, current: QListWidgetItem | None = None,
+                           previous: QListWidgetItem | None = None) -> None:
+        if previous is not None and current is not previous and not self._discard_ok():
+            self.list.blockSignals(True)  # stay on the edited game, edits kept
+            self.list.setCurrentItem(previous)
+            self.list.blockSignals(False)
+            return
+        self._show_selected()
+
+    def _show_selected(self) -> None:
         game_id = self._selected_id()
         self.error_label.clear()
         self.delete_button.setEnabled(game_id is not None)
@@ -166,6 +188,7 @@ class GameSetupDialog(QDialog):
             game = self._games.get(game_id)
             self.name.setText(game.name)
             self._load_template(game.template)
+        self._loaded = (self.name.text(), self.template())  # read back: no false alarms
 
     # --- template <-> widgets ---------------------------------------------------------------
 
@@ -234,3 +257,20 @@ class GameSetupDialog(QDialog):
             return
         if self._run("delete the game", lambda: self._games.delete(game_id)):
             self._reload()
+
+    # --- closing ----------------------------------------------------------------------------
+
+    def accept(self) -> None:
+        """Close button: asks before discarding unsaved edits."""
+        if self._discard_ok():
+            super().accept()
+
+    def reject(self) -> None:
+        """Esc / window close (Qt routes it here): asks before discarding unsaved edits."""
+        if self._discard_ok():
+            super().reject()
+
+    def force_close(self) -> None:
+        """Close without asking (used when the vault locks: edits are discarded)."""
+        super().reject()
+

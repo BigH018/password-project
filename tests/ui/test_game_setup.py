@@ -195,3 +195,96 @@ def test_add_ranks_button_feeds_the_ladder(qtbot: Any, dialog: gs.GameSetupDialo
     monkeypatch.setattr(ladder_editor.AddRankDialog, "exec_", fake_exec)
     dialog.ladder.add_button.click()
     assert dialog.ladder.tiers() == [TierDef("Champion", 10)]
+
+
+# --- CR-L4: unsaved edits are never discarded silently -------------------------------------
+
+
+@pytest.fixture
+def asked(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    state: dict[str, Any] = {"titles": [], "answer": False}
+
+    def fake_confirm(_parent: Any, title: str, *_a: Any, **_k: Any) -> bool:
+        state["titles"].append(title)
+        return state["answer"]
+
+    monkeypatch.setattr(gs.messages, "confirm", fake_confirm)
+    return state
+
+
+def _two_games(games: GameService) -> tuple[str, str]:
+    first = games.add("Fake Game One", starter_template_blank()).id
+    second = games.add("Fake Game Two", starter_template_blank()).id
+    return first, second
+
+
+def starter_template_blank() -> Any:
+    from vaultkeeper.core.game_template import GameTemplate
+
+    return GameTemplate()
+
+
+def _select(dialog: gs.GameSetupDialog, game_id: str | None) -> None:
+    for row in range(dialog.list.count()):
+        if dialog.list.item(row).data(Qt.UserRole) == game_id:
+            dialog.list.setCurrentRow(row)
+            return
+    raise AssertionError("game not in the list")
+
+
+def test_switching_games_asks_before_discarding(qtbot: Any, games: GameService,
+                                                asked: dict[str, Any]) -> None:
+    first, second = _two_games(games)
+    dlg = gs.GameSetupDialog(games)
+    qtbot.addWidget(dlg)
+    _select(dlg, first)
+    assert asked["titles"] == []  # nothing edited yet
+    dlg.name.setText("Fake Game One Renamed")
+    _select(dlg, second)
+    assert asked["titles"] == ["Discard changes?"]
+    assert dlg.list.currentItem().data(Qt.UserRole) == first  # stayed on the edited game
+    assert dlg.name.text() == "Fake Game One Renamed"  # edit kept
+    asked["answer"] = True
+    _select(dlg, second)
+    assert dlg.list.currentItem().data(Qt.UserRole) == second
+    assert games.get(first).name == "Fake Game One"  # discarded, never saved
+
+
+def test_close_asks_before_discarding(qtbot: Any, games: GameService,
+                                      asked: dict[str, Any]) -> None:
+    first, _second = _two_games(games)
+    dlg = gs.GameSetupDialog(games)
+    qtbot.addWidget(dlg)
+    dlg.show()
+    _select(dlg, first)
+    dlg.regions.setPlainText("EU")
+    dlg.close_button.click()
+    assert asked["titles"] == ["Discard changes?"] and dlg.isVisible()
+    dlg.reject()  # Esc / window close
+    assert len(asked["titles"]) == 2 and dlg.isVisible()
+    asked["answer"] = True
+    dlg.close_button.click()
+    assert not dlg.isVisible()
+
+
+def test_saved_or_untouched_games_never_ask(qtbot: Any, games: GameService,
+                                            asked: dict[str, Any]) -> None:
+    first, second = _two_games(games)
+    dlg = gs.GameSetupDialog(games)
+    qtbot.addWidget(dlg)
+    dlg.show()
+    _select(dlg, first)
+    dlg.name.setText("Fake Game One Renamed")
+    dlg.save_button.click()
+    _select(dlg, second)
+    dlg.close_button.click()
+    assert asked["titles"] == [] and not dlg.isVisible()
+
+
+def test_force_close_never_asks(qtbot: Any, games: GameService, asked: dict[str, Any]) -> None:
+    dlg = gs.GameSetupDialog(games)
+    qtbot.addWidget(dlg)
+    dlg.show()
+    dlg.name.setText("Half-typed fake game")
+    dlg.force_close()
+    assert asked["titles"] == [] and not dlg.isVisible()

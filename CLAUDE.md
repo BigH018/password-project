@@ -218,7 +218,8 @@ vaultkeeper/                       repo root
       change_password_dialog.py    change master password (KDF off-thread, closable while busy)
       account_dialog.py            add/edit: AccountForm + live duplicate warning + unsaved-changes
                                    prompt (force_close() skips it on lock)
-      game_setup_dialog.py         Game setup: list + editor (starter, ranks, regions, fields, extras)
+      game_setup_dialog.py         Game setup: list + editor (starter, ranks, regions, fields, extras);
+                                   asks before discarding unsaved edits (switch game, Close, Esc)
       quick_add_dialog.py          Quick Add (AccountDialog subclass): Enter = save & next,
                                    batch values, counter, paste box, Ctrl+Enter anywhere
       settings_dialog.py           File -> Settings (Ctrl+,): auto-lock/Quick Add timeouts, clipboard
@@ -545,6 +546,8 @@ python -m vaultkeeper  # run the app
   region disabled until chosen); a selected sidebar game is pre-filled.
 - UI tests stub `messages.confirm`/`show_error` by default (`tests/ui_support.py`): a real
   modal box left open at teardown crashes Qt.
+- Game setup asks "Discard changes?" before switching games or closing with unsaved edits
+  (CR-L4); No keeps the edited game selected. force_close() (lock) never asks.
 - Delete key only deletes while the account table has focus. Edit has no keyboard shortcut
   (rows open on double-click/Enter in 4c) so Enter in text fields is never hijacked.
 - Copy shortcuts follow KeePass (Ctrl+B username, Ctrl+C password) plus Ctrl+E email; they
@@ -685,7 +688,7 @@ Group 5 (in progress): small and deferred items
       without "Something went wrong"; don't list the folder on every keystroke (debounce or
       on confirm)
 - [x] 20 CR-L7 tell the user where the .damaged copy was saved (`last_damaged_copy`)
-- [ ] 21 CR-L4 game setup warns before discarding unsaved edits (switching game, Close)
+- [x] 21 CR-L4 game setup warns before discarding unsaved edits (switching game, Close)
 - [ ] 22 CR-L6 backups off the UI thread via the injected TaskRunner; keep the failure
       banner; lock waits for or safely cancels a running backup
 - [ ] 23 CR-L8 `_prepare_change` must not read `self._session` on the worker thread: pass
