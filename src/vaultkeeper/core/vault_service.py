@@ -30,7 +30,7 @@ from vaultkeeper.crypto.kdf import (
     new_salt,
     wipe,
 )
-from vaultkeeper.errors import VaultAuthError, VaultIOError, VaultLockedError
+from vaultkeeper.errors import VaultAuthError, VaultFormatError, VaultIOError, VaultLockedError
 from vaultkeeper.storage import vault_file
 
 log = logging.getLogger(__name__)
@@ -258,11 +258,12 @@ class VaultService:
     # --- writing ----------------------------------------------------------------------------
 
     def _write(self, session: _Session) -> None:
-        """Seal and write. After opening from ``.bak``, the (damaged) main file is copied
-        aside instead of over the good ``.bak``. If the write fails, the next save retries."""
+        """Seal and write. A damaged main file (we opened from ``.bak``, or it no longer
+        decrypts) is copied aside instead of over the good ``.bak``. If the write fails, the
+        next save retries."""
         blob = envelope.seal(dumps_payload(session.data), session.key, session.kdf, session.salt)
         quarantine = None
-        if self._opened_from_backup and self._path.exists():
+        if self._path.exists() and (self._opened_from_backup or not self._main_file_ok()):
             quarantine = vault_file.damaged_path(self._path)
         vault_file.write_vault_atomic(
             self._path, blob, self._verifier(session.key), quarantine_as=quarantine
@@ -276,6 +277,18 @@ class VaultService:
                 listener()
             except Exception:  # a listener must never break saving
                 log.exception("Save listener failed")
+
+    def _main_file_ok(self) -> bool:
+        """Whether the file on disk still decrypts with the CURRENT session key (during a
+        password change that is still the old key). False = damaged: keep it out of .bak."""
+        if self._session is None:
+            return True  # creating: nothing of ours on disk yet
+        try:
+            self._verifier(self._session.key)(vault_file.read_vault_bytes(self._path))
+        except (VaultAuthError, VaultFormatError):
+            log.warning("Vault file on disk no longer decrypts; keeping it out of .bak")
+            return False
+        return True
 
     @staticmethod
     def _verifier(key: bytearray) -> Callable[[bytes], None]:

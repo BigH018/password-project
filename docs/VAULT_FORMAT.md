@@ -108,6 +108,10 @@ newer versions. Migrations live in `core/migrations.py` as `migrate_vN_to_vN+1`,
 4. `os.replace(<vault>.tmp, <vault>)` (atomic within one volume on NTFS and POSIX).
 5. On POSIX, fsync the directory. On startup, remove stale `.tmp` files left by earlier crashes.
 6. If the main file fails to open, the UI *offers* to try `.bak`. It never switches silently.
+   Before step 3, `vault_service` checks that the current main file still decrypts with the
+   session key (the old key during a password change). If it doesn't (damaged on disk while
+   unlocked), step 7's quarantine is used instead, so a damaged file never becomes `.bak`
+   (test: `test_save_never_rotates_a_damaged_main_file_into_bak`).
 7. **After opening from `.bak`**, the next save does NOT do step 3. Instead the current
    (damaged) main file is COPIED (exclusive create + fsync, never overwriting) to
    `<vault>.damaged-YYYYMMDD-HHMMSS` (`quarantine_as`), so the good `.bak` is never

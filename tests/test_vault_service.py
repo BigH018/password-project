@@ -176,6 +176,43 @@ def test_save_after_opening_backup_keeps_good_bak_and_damaged_copy(
     make_service().unlock(MASTER)  # main vault is healthy again
 
 
+def test_save_never_rotates_a_damaged_main_file_into_bak(
+    make_service: Factory, vault_path: Path
+) -> None:
+    """CR-L2: the main file got damaged on disk while unlocked: .bak keeps the good copy."""
+    svc = make_service()
+    svc.create(MASTER)
+    _populate(svc)
+    good_previous = vault_path.read_bytes()
+    svc.save()  # .bak = good_previous
+    good_bak = svc.backup_path.read_bytes()
+    assert good_bak == good_previous
+    damaged = bytearray(vault_path.read_bytes())
+    damaged[-1] ^= 0x01
+    vault_path.write_bytes(bytes(damaged))
+
+    svc.save()
+    assert svc.backup_path.read_bytes() == good_bak  # NOT the damaged file
+    kept = svc.last_damaged_copy
+    assert kept is not None and kept.read_bytes() == bytes(damaged)
+    svc.lock()
+    make_service().unlock(MASTER)  # main vault is healthy again
+    make_service().unlock(MASTER, use_backup=True)
+
+
+def test_password_change_rotates_old_file_normally(make_service: Factory,
+                                                    vault_path: Path) -> None:
+    """The file on disk is still under the OLD password: that's not damage."""
+    svc = make_service()
+    svc.create(MASTER)
+    _populate(svc)
+    before = vault_path.read_bytes()
+    svc.change_password(MASTER, OTHER_MASTER)
+    assert svc.last_damaged_copy is None
+    assert not list(vault_path.parent.glob("*.damaged-*"))
+    assert svc.backup_path.read_bytes() == before
+
+
 def test_failed_save_after_opening_backup_keeps_vault_and_retries(
     make_service: Factory, vault_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
