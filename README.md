@@ -164,7 +164,21 @@ folder, with its own settings and logs. The demo master password is `test` (allo
 for the throwaway demo; real vaults need a strong one). Everything is deleted when you quit, and your real settings and
 vault are never touched.
 
-> A standalone Windows `.exe` (no Python needed) is planned. See the [Roadmap](#roadmap).
+### Build the Windows .exe
+
+```powershell
+pyinstaller packaging/vaultkeeper.spec --noconfirm --clean --distpath "$env:USERPROFILE\Desktop"
+```
+
+This makes two one-folder programs (no Python needed to run them):
+- `Account Manager\Account Manager.exe`: the app (no console window). Keep the whole folder,
+  including `_internal`, and pin the .exe.
+- `Account Manager (console)\Account Manager (console).exe`: the same app with a console
+  window, only for troubleshooting. Safe to delete.
+
+The .exe isn't code-signed, so Windows SmartScreen shows "Windows protected your PC" the
+first time: click **More info -> Run anyway**. Some antivirus programs flag PyInstaller apps
+by mistake. The build uses the same settings, logs and vault location as `python -m vaultkeeper`.
 
 ---
 
@@ -360,7 +374,7 @@ Project rules (also in [`CLAUDE.md`](CLAUDE.md)):
 - [x] Clipboard auto-clear, auto-lock, password generator, backups, encrypted export
 - [x] Quick Add with batch mode and paste assist
 - [x] Dark theme, branding, settings dialog, window memory, error notice
-- [ ] Standalone Windows `.exe` (PyInstaller)
+- [x] Standalone Windows `.exe` (PyInstaller, one folder)
 - [ ] Import from an encrypted export
 
 Two-factor (TOTP) code generation was considered and deliberately left out.

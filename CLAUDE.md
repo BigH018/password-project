@@ -128,7 +128,8 @@ vaultkeeper/                       repo root
   scripts/
     recover_vault.py               standalone decrypt-to-stdout (cryptography + argon2-cffi only)
   packaging/
-    vaultkeeper.spec          (P)  PyInstaller spec (phase 8e)
+    vaultkeeper.spec               PyInstaller spec: one Analysis -> "Account Manager" (windowed)
+                                   + "Account Manager (console)"; icon, file details, datas
     icon_source_32px.ico           the user's 32px icon: app_icon.ico is built from it (crisp
                                    pixel upscale to 16-256px; the app uses only the .ico)
     icon_source.jpg                the user's 1920px icon art, used only for docs/images/icon.png
@@ -490,11 +491,9 @@ audit fixes (32 items, 2026-10-01) are all done and pushed. Past decisions, know
 deferred items (including manual checks only the user can do) are in `docs/DECISIONS.md`:
 grep it when a task touches an earlier choice, and record new decisions there.
 
-- [ ] **Phase 8e: .exe (next).** Decided: PyInstaller one-folder build, windowed (`app.py`
-      already guards prints when stdout is None), bundle dark.qss and the icon from
-      `ui/assets/`, spec in `packaging/vaultkeeper.spec`. Antivirus false positives: mention,
-      don't work around. Bundle Qt's `imageformats/qico.dll` (rank pictures from .ico files)
-      and check it works in the built .exe.
+Since then (2026-10-02): rank pictures (schema v3), the Game setup redesign (tabs) and
+Phase 8e, the Windows .exe (`packaging/vaultkeeper.spec`, build command in README; choices
+in docs/DECISIONS.md). All planned phases are done. Rebuild the .exe after code changes.
 
 ### Work rules for a list of tasks or fixes
 Do them in the agreed order, ONE COMMIT PER TASK. For each one: check whether it's already

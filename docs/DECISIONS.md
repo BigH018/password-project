@@ -170,6 +170,13 @@ is when the user decided. Add new decisions here.
   from an .ico/.png file. Stored inside the vault (schema v3), shrunk to at most 64x64 PNG,
   so they are encrypted, backed up and move with the vault. No rank art ships with the app.
   Shown in the accounts table, the account form's rank picker and the search rank filter.
+- Windows build (user, 2026-10-02): PyInstaller one-folder, `packaging/vaultkeeper.spec`.
+  Two programs from one build: `Account Manager.exe` (windowed, the one to pin) and
+  `Account Manager (console).exe` (console, for troubleshooting; the user deletes it once
+  happy). Built to the Desktop. App icon embedded in the .exe, file details (BigH, version
+  from `vaultkeeper.__version__`). No UPX, no admin rights, normal optimization level (the
+  code has asserts). Not code-signed: SmartScreen "Run anyway" on first start. About
+  100 MB per folder (mostly Qt).
 
 ## Known issues and deferred items
 
