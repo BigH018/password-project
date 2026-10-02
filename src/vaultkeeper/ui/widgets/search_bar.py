@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QLineEdit, QPushButton, QWidget
 
 from vaultkeeper.config.constants import STATUSES, UNRANKED_LABEL
@@ -21,14 +22,15 @@ def _combo(label: str, parent: QWidget) -> QComboBox:
     return box
 
 
-def _refill(box: QComboBox, label: str, values: list[tuple[str, Any]]) -> None:
-    """Replace options, keeping the current choice if it is still offered."""
+def _refill(box: QComboBox, label: str, values: list[tuple[str, Any]],
+            icons: dict[str, QIcon] | None = None) -> None:
+    """Replace options (with ``icons`` by text), keeping the current choice if offered."""
     keep = box.currentData()
     box.blockSignals(True)
     box.clear()
     box.addItem(f"{label}: any", _ANY)
     for text, data in values:
-        box.addItem(text, data)
+        box.addItem((icons or {}).get(text, QIcon()), text, data)
     index = box.findData(keep) if keep is not None else 0
     box.setCurrentIndex(max(index, 0))
     box.blockSignals(False)
@@ -63,10 +65,13 @@ class SearchBar(QWidget):
             box.currentIndexChanged.connect(self.changed)
         self.clear_button.clicked.connect(self.reset)
 
-    def set_facets(self, facets: Facets) -> None:
-        """Offer the given tiers, regions and labels (keeps current choices if possible)."""
+    def set_facets(self, facets: Facets, rank_icons: dict[str, QIcon] | None = None) -> None:
+        """Offer the given tiers, regions and labels (keeps current choices if possible).
+
+        ``rank_icons`` (rank name -> picture) is given only when one game is selected.
+        """
         _refill(self.rank, "Rank",
-                [(UNRANKED_LABEL, _UNRANKED_KEY), *((t, t) for t in facets.tiers)])
+                [(UNRANKED_LABEL, _UNRANKED_KEY), *((t, t) for t in facets.tiers)], rank_icons)
         _refill(self.region, "Region", [(r, r) for r in facets.regions])
         _refill(self.tag, "Label", [(t, t) for t in facets.tags])
 

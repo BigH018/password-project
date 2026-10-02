@@ -12,6 +12,7 @@ from PyQt5.QtCore import QBuffer, QByteArray, QIODevice, Qt
 from PyQt5.QtGui import QIcon, QImage, QImageReader, QPixmap
 from PyQt5.QtWidgets import QWidget
 
+from vaultkeeper.core.game_template import GameTemplate
 from vaultkeeper.core.rank_image import MAX_SIDE, is_valid_rank_image
 from vaultkeeper.ui import messages
 from vaultkeeper.ui.file_pickers import choose_image_file
@@ -74,6 +75,12 @@ def picture_icon(data: bytes | None) -> QIcon:
     """A stored picture as an icon (null if there is none)."""
     pixmap = picture_pixmap(data)
     return QIcon() if pixmap.isNull() else QIcon(pixmap)
+
+
+def tier_icons(template: GameTemplate) -> dict[str, QIcon]:
+    """Rank name -> icon, for the template's ranks that have a picture."""
+    icons = {t.name: picture_icon(t.image) for t in template.tiers if t.image is not None}
+    return {name: icon for name, icon in icons.items() if not icon.isNull()}
 
 
 class PicturePicker:

@@ -27,6 +27,7 @@ from vaultkeeper.core.models import Account, Game, Rank
 from vaultkeeper.core.validation import split_name_and_tag
 from vaultkeeper.ui.generator_dialog import GeneratorDialog
 from vaultkeeper.ui.messages import run_modal
+from vaultkeeper.ui.rank_pictures import tier_icons
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.widgets.rank_picker import NOT_IN_LIST, RankPicker, RegionPicker
 from vaultkeeper.ui.widgets.secret_field import SecretField
@@ -157,7 +158,7 @@ class AccountForm(QWidget):
             preset = game.rank_preset
             if account is not None:
                 self.region.set_preset(preset, keep=account.region, use_current=False)
-                self.rank.set_preset(preset, keep=account.rank)
+                self.rank.set_preset(preset, keep=account.rank, icons=tier_icons(template))
             else:  # the user picked another game
                 self._switch_pickers(game)
         for key, widgets in self._optional.items():
@@ -174,7 +175,7 @@ class AccountForm(QWidget):
         kept only for the account's own stored game, so they never move to another game."""
         preset = game.rank_preset
         self.region.set_preset(preset, listed_only=True)
-        self.rank.set_preset(preset, listed_only=True)
+        self.rank.set_preset(preset, listed_only=True, icons=tier_icons(game.template))
         if game.id == self._base_game_id:
             if self.region.region() is None:
                 self.region.set_region(self._base_region)

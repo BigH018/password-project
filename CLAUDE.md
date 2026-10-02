@@ -39,7 +39,7 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/game_template.py, core/rank_image.py, core/serialization.py, core/template_codec.py, core/migrations.py, tests/test_serialization.py, tests/test_migrations.py | grep ui/ for the field to see where it is displayed |
 | A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/safe_text.py, ui/file_pickers.py, ui/theme.py, and signatures of the services it calls (main window: also ui/accounts_view.py) | ui/app_controller.py (screen flow), ui/qt_adapters.py, tests/ui_support.py, matching tests/ui file |
 | App startup, demo mode | app.py, demo.py, ui/app_controller.py | config/settings.py, config/logging_setup.py, tests/test_demo.py |
-| Game templates, Game setup | docs/DATA_MODEL.md, core/game_template.py, core/template_validation.py, ui/game_setup_dialog.py | ui/widgets/ladder_editor.py, ui/rank_pictures.py, core/rank_image.py, extra_fields_editor.py, account_form.py, tests/test_templates.py, tests/ui/test_game_setup.py, tests/ui/test_rank_pictures.py |
+| Game templates, Game setup | docs/DATA_MODEL.md, core/game_template.py, core/template_validation.py, ui/game_setup_dialog.py | ui/widgets/ladder_editor.py, ui/rank_pictures.py (+ where shown: account_table.py, rank_picker.py, search_bar.py), core/rank_image.py, extra_fields_editor.py, account_form.py, tests/test_templates.py, tests/ui/test_game_setup.py, tests/ui/test_rank_pictures.py |
 | Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures, core/validation.py signatures | tests/test_paste_assist.py, test_entry_session.py |
 | Clipboard, auto-lock, session lock | security/*, ui/session_guard.py, ui/qt_adapters.py, ui/copy_actions.py | tests/test_clipboard.py, test_autolock.py, tests/ui/test_phase5_ui.py |
 | Backups, export | core/backup.py, core/exporter.py, storage/vault_file.py, ui/backup_dialog.py, ui/export_dialog.py | docs/VAULT_FORMAT.md, ui/app_controller.py (wiring) |
@@ -241,6 +241,7 @@ vaultkeeper/                       repo root
                                    closes it
       rank_pictures.py             rank pictures: .ico/.png file -> PNG <= 64x64 (largest .ico
                                    frame, PNG/ICO only, <= 5 MB), picture_icon/pixmap,
+                                   tier_icons(template) (rank name -> icon, for display),
                                    PicturePicker (remembers the folder, error box if unusable)
       safe_text.py                 plain_label / message_box (Qt.PlainText: user data is never
                                    rendered as HTML), link_label for fixed app text only
@@ -251,9 +252,10 @@ vaultkeeper/                       repo root
                                    (queued, any thread, one at a time, Open log folder)
       widgets/
         account_table.py           table model (passwords masked, extra columns, never secret) + proxy;
-                                   rank presets cached per set_rows
+                                   rank presets + rank pictures cached per set_rows
         game_sidebar.py            "All games" + games with counts
-        search_bar.py              free text + status/rank/region/label dropdowns -> AccountFilter
+        search_bar.py              free text + status/rank/region/label dropdowns -> AccountFilter;
+                                   rank pictures only when one game is selected
         account_form.py            form built from the game template (hidden fields, extra fields)
         ladder_editor.py           rank list editor: tiers + divisions + pictures (Set/Remove
                                    picture), order, division style
@@ -261,7 +263,8 @@ vaultkeeper/                       repo root
                                    picture; Enter = next
         extra_fields_editor.py     extra fields editor: label, type, dropdown options (ids kept)
         rank_picker.py             RankPicker (tier + division) and RegionPicker, driven by the game
-                                   template; values not in the list shown marked, never dropped
+                                   template (with rank pictures); values not in the list shown
+                                   marked, never dropped
         secret_field.py            masked edit with show/hide; clear() also wipes undo history
                                    (copying is done from the table)
         strength_meter.py          live master-password strength bar + suggestions
@@ -334,7 +337,8 @@ vaultkeeper/                       repo root
                                    test_file_pickers (non-native, closed on lock, activity),
                                    test_account_table (rank preset built once per game),
                                    test_secret_field (clear() wipes undo in all password dialogs),
-                                   test_rank_pictures (file -> picture, set/remove, add form, save)
+                                   test_rank_pictures (file -> picture, set/remove, add form, save),
+                                   test_rank_pictures_shown (table, rank picker, search filter)
 ```
 
 ---

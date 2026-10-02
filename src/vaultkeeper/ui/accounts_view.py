@@ -22,6 +22,7 @@ from vaultkeeper.core.account_service import AccountService
 from vaultkeeper.core.game_service import GameService
 from vaultkeeper.core.models import Account
 from vaultkeeper.core.search import facets, filter_accounts
+from vaultkeeper.ui.rank_pictures import tier_icons
 from vaultkeeper.ui.widgets.account_table import AccountSortProxy, AccountTableModel
 from vaultkeeper.ui.widgets.game_sidebar import GameSidebar
 from vaultkeeper.ui.widgets.search_bar import SearchBar
@@ -120,8 +121,9 @@ class AccountsPanel(QWidget):
         if game_id is None:
             self.search.set_facets(facets(self._accounts.list_all()))
         else:
-            preset = self._games.get(game_id).rank_preset
-            self.search.set_facets(facets(self._accounts.list_for_game(game_id), preset))
+            game = self._games.get(game_id)
+            self.search.set_facets(facets(self._accounts.list_for_game(game_id), game.rank_preset),
+                                   tier_icons(game.template))
 
     def refresh_rows(self) -> None:
         """Re-run the filter and show the matching accounts."""

@@ -5,11 +5,13 @@ from __future__ import annotations
 from typing import Any
 
 from PyQt5.QtCore import QAbstractTableModel, QModelIndex, QSortFilterProxyModel, Qt
+from PyQt5.QtGui import QIcon
 
 from vaultkeeper.config.constants import GamePreset
 from vaultkeeper.core.game_template import CustomField, FieldKind
 from vaultkeeper.core.models import Account, Game
 from vaultkeeper.core.search import rank_label, rank_sort_key
+from vaultkeeper.ui.rank_pictures import tier_icons
 
 MASK = chr(0x2022) * 8  # bullet characters; built with chr() to keep the source ASCII-only
 
@@ -36,6 +38,7 @@ class AccountTableModel(QAbstractTableModel):
         self._rows: list[Account] = []
         self._games: dict[str, Game] = {}
         self._presets: dict[str, GamePreset] = {}  # built once per set_rows, not per cell
+        self._rank_icons: dict[str, dict[str, QIcon]] = {}  # game id -> rank name -> icon
         self._columns = COLUMNS
         self._extra_fields: dict[str, CustomField] = {}
         self._show_passwords = False
@@ -53,6 +56,8 @@ class AccountTableModel(QAbstractTableModel):
         self._rows = list(accounts)
         self._games = dict(games)
         self._presets = {game_id: game.rank_preset for game_id, game in self._games.items()}
+        self._rank_icons = {game_id: tier_icons(game.template)
+                            for game_id, game in self._games.items()}
         columns = [c for c in COLUMNS if show_game or c[0] != "game"]
         if single_game is not None:
             template = single_game.template
@@ -154,9 +159,14 @@ class AccountTableModel(QAbstractTableModel):
         return None
 
     def data(self, index: QModelIndex, role: int = Qt.DisplayRole) -> Any:
-        if not index.isValid() or role != Qt.DisplayRole:
+        if not index.isValid():
             return None
-        return self._value(self._rows[index.row()], self._columns[index.column()][0])
+        account, key = self._rows[index.row()], self._columns[index.column()][0]
+        if role == Qt.DecorationRole and key == "rank" and account.rank.tier is not None:
+            return self._rank_icons.get(account.game_id, {}).get(account.rank.tier)
+        if role != Qt.DisplayRole:
+            return None
+        return self._value(account, key)
 
 
 class AccountSortProxy(QSortFilterProxyModel):

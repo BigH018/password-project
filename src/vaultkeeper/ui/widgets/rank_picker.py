@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QComboBox, QHBoxLayout, QLineEdit, QStackedWidget, QWidget
 
 from vaultkeeper.config.constants import UNRANKED_LABEL, GamePreset, format_division
@@ -52,11 +53,11 @@ class RankPicker(QWidget):
         return self._preset is not None and self._preset.free_text
 
     def set_preset(self, preset: GamePreset, keep: Rank | None = None, *,
-                   listed_only: bool = False) -> None:
+                   listed_only: bool = False, icons: dict[str, QIcon] | None = None) -> None:
         """Switch ladders. ``keep`` is shown if possible (default: the current rank).
 
         A tier not in the ladder is shown marked, unless ``listed_only`` (switching to
-        another game): then it is reset to unranked.
+        another game): then it is reset to unranked. ``icons`` maps rank names to pictures.
         """
         keep = self.rank() if keep is None else keep
         if listed_only and not preset.free_text and keep.tier and preset.tier(keep.tier) is None:
@@ -70,7 +71,7 @@ class RankPicker(QWidget):
         self.tier.clear()
         self.tier.addItem(UNRANKED_LABEL, None)
         for name in preset.tier_names:
-            self.tier.addItem(name, name)
+            self.tier.addItem((icons or {}).get(name, QIcon()), name, name)
         if keep.tier is not None and preset.tier(keep.tier) is None:
             self.tier.addItem(keep.tier + NOT_IN_LIST, keep.tier)
         self.tier.setCurrentIndex(max(self.tier.findData(keep.tier), 0))

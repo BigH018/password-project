@@ -63,6 +63,10 @@ never leaves your machine, and the app contains no networking code at all.
 - **Per-game templates.** Every game has its own editable rank ladder (tiers with 0-10
   divisions, numbered or Roman), regions, which standard fields are shown, and **extra
   fields** (text, number, dropdown or hidden secret).
+- **Rank pictures.** Give any rank a picture from your own .ico or .png file (Game setup ->
+  Set picture...). It shows next to the rank in the account list, the rank picker and the
+  rank filter. Pictures are shrunk to 64x64 and stored inside the encrypted vault. No rank
+  art ships with the app: game rank icons belong to their publishers.
 - **Starter templates** for Valorant, Marvel Rivals and Overwatch, or set up any game yourself.
 - **Editing a template never deletes data.** Values that are no longer in a game's list are
   kept and clearly marked "(not in this game's list)".
