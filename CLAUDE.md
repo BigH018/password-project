@@ -39,7 +39,7 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/game_template.py, core/rank_image.py, core/serialization.py, core/template_codec.py, core/migrations.py, tests/test_serialization.py, tests/test_migrations.py | grep ui/ for the field to see where it is displayed |
 | A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/safe_text.py, ui/file_pickers.py, ui/theme.py, and signatures of the services it calls (main window: also ui/accounts_view.py) | ui/app_controller.py (screen flow), ui/qt_adapters.py, tests/ui_support.py, matching tests/ui file |
 | App startup, demo mode | app.py, demo.py, ui/app_controller.py | config/settings.py, config/logging_setup.py, tests/test_demo.py |
-| Game templates, Game setup | docs/DATA_MODEL.md, core/game_template.py, core/template_validation.py, ui/game_setup_dialog.py | ui/widgets/ladder_editor.py, ui/rank_pictures.py (+ where shown: account_table.py, rank_picker.py, search_bar.py), core/rank_image.py, extra_fields_editor.py, account_form.py, tests/test_templates.py, tests/ui/test_game_setup.py, tests/ui/test_rank_pictures.py |
+| Game templates, Game setup | docs/DATA_MODEL.md, core/game_template.py, core/template_validation.py, ui/game_setup_dialog.py | ui/widgets/ladder_editor.py, field_toggles.py, ui/rank_pictures.py (+ where shown: account_table.py, rank_picker.py, search_bar.py), core/rank_image.py, extra_fields_editor.py, account_form.py, tests/test_templates.py, tests/ui/test_game_setup.py, tests/ui/test_rank_pictures.py |
 | Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures, core/validation.py signatures | tests/test_paste_assist.py, test_entry_session.py |
 | Clipboard, auto-lock, session lock | security/*, ui/session_guard.py, ui/qt_adapters.py, ui/copy_actions.py | tests/test_clipboard.py, test_autolock.py, tests/ui/test_phase5_ui.py |
 | Backups, export | core/backup.py, core/exporter.py, storage/vault_file.py, ui/backup_dialog.py, ui/export_dialog.py | docs/VAULT_FORMAT.md, ui/app_controller.py (wiring) |
@@ -227,7 +227,8 @@ vaultkeeper/                       repo root
       change_password_dialog.py    change master password (KDF off-thread, closable while busy)
       account_dialog.py            add/edit: AccountForm + live duplicate warning + unsaved-changes
                                    prompt (force_close() skips it on lock)
-      game_setup_dialog.py         Game setup: list + editor (starter, ranks, regions, fields, extras);
+      game_setup_dialog.py         Game setup: game list + editor (name, starter) with tabs Ranks and
+                                   Fields and regions (live counts in tab/box titles);
                                    asks before discarding unsaved edits (switch game, Close, Esc)
       quick_add_dialog.py          Quick Add (AccountDialog subclass): Enter = save & next,
                                    batch values, counter, paste box, Ctrl+Enter anywhere
@@ -257,8 +258,9 @@ vaultkeeper/                       repo root
         search_bar.py              free text + status/rank/region/label dropdowns -> AccountFilter;
                                    rank pictures only when one game is selected
         account_form.py            form built from the game template (hidden fields, extra fields)
-        ladder_editor.py           rank list editor: tiers + divisions + pictures (Set/Remove
-                                   picture), order, division style
+        ladder_editor.py           rank list editor: tall table (tiers + divisions + pictures),
+                                   actions + picture preview on the right, division style
+        field_toggles.py           Game setup checkboxes: which optional standard fields show
         add_rank_dialog.py         quick add: rank name, has divisions? how many (1-10), optional
                                    picture; Enter = next
         extra_fields_editor.py     extra fields editor: label, type, dropdown options (ids kept)
@@ -338,7 +340,8 @@ vaultkeeper/                       repo root
                                    test_account_table (rank preset built once per game),
                                    test_secret_field (clear() wipes undo in all password dialogs),
                                    test_rank_pictures (file -> picture, set/remove, add form, save),
-                                   test_rank_pictures_shown (table, rank picker, search filter)
+                                   test_rank_pictures_shown (table, rank picker, search filter),
+                                   test_game_setup_layout (tabs + counts, field toggles, preview)
 ```
 
 ---

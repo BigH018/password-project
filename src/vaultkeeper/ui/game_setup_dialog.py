@@ -11,11 +11,9 @@ from collections.abc import Callable
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
     QFormLayout,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLineEdit,
@@ -24,24 +22,23 @@ from PyQt5.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSplitter,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from vaultkeeper.core.game_service import GameService
-from vaultkeeper.core.game_template import OPTIONAL_FIELDS, STARTERS, GameTemplate, starter_template
+from vaultkeeper.core.game_template import STARTERS, GameTemplate, starter_template
 from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui import messages
 from vaultkeeper.ui.safe_text import plain_label
-from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
+from vaultkeeper.ui.theme import ERROR_STYLE
 from vaultkeeper.ui.widgets.extra_fields_editor import ExtraFieldsEditor
+from vaultkeeper.ui.widgets.field_toggles import FieldToggles
 from vaultkeeper.ui.widgets.ladder_editor import LadderEditor
 
-FIELD_LABELS = {
-    "tag": "Tag (#)", "region": "Region", "rank": "Rank", "email_password": "Email password",
-    "email_login_url": "Email login URL", "recovery_email": "Recovery email",
-}  # fmt: skip
 NEW_GAME = "+ New game"
+RANKS_TAB, FIELDS_TAB = range(2)
 
 
 class GameSetupDialog(QDialog):
@@ -53,7 +50,7 @@ class GameSetupDialog(QDialog):
         self.changed = False
         self._loaded: tuple[str, GameTemplate] = ("", GameTemplate())  # editor as loaded
         self.setWindowTitle("Game setup")
-        self.resize(900, 640)
+        self.resize(960, 680)
 
         self.list = QListWidget(self)
         self.name = QLineEdit(self)
@@ -65,8 +62,12 @@ class GameSetupDialog(QDialog):
         self.ladder = LadderEditor(self)
         self.regions = QPlainTextEdit(self)
         self.regions.setPlaceholderText("One region per line, e.g.\nEU\nNA-East")
-        self.field_toggles = {key: QCheckBox(label, self) for key, label in FIELD_LABELS.items()}
+        self.fields = FieldToggles(self)
+        self.field_toggles = self.fields.boxes
         self.extras = ExtraFieldsEditor(self)
+        self.regions_box = QGroupBox("Regions", self)
+        self.extras_box = QGroupBox("Extra fields", self)
+        self.tabs = QTabWidget(self)
         self.error_label = plain_label(parent=self)
         self.error_label.setStyleSheet(ERROR_STYLE)
         self.error_label.setWordWrap(True)
@@ -81,6 +82,10 @@ class GameSetupDialog(QDialog):
         self.save_button.clicked.connect(self._save)
         self.delete_button.clicked.connect(self._delete)
         self.close_button.clicked.connect(self.accept)
+        for model in (self.ladder.table.model(), self.extras.table.model()):
+            model.rowsInserted.connect(self._update_tab_titles)
+            model.rowsRemoved.connect(self._update_tab_titles)
+        self.regions.textChanged.connect(self._update_tab_titles)
         self._reload()
 
     def _build_layout(self) -> None:
@@ -91,36 +96,31 @@ class GameSetupDialog(QDialog):
         top.addRow("Name", self.name)
         top.addRow("Start from", starter_row)
 
-        ranks_box = QGroupBox("Ranks", self)
-        QVBoxLayout(ranks_box).addWidget(self.ladder)
-        regions_box = QGroupBox("Regions", self)
-        QVBoxLayout(regions_box).addWidget(self.regions)
+        self.regions.setToolTip("One region or server per line, in the order you want them")
+        QVBoxLayout(self.regions_box).addWidget(self.regions)
         fields_box = QGroupBox("Standard fields shown", self)
-        grid = QGridLayout(fields_box)
-        for i, box in enumerate(self.field_toggles.values()):
-            grid.addWidget(box, i // 3, i % 3)
-        always = plain_label(
-            "Always shown: name, login, password, email, status, labels, notes.", self)
-        always.setStyleSheet(MUTED_STYLE)
-        grid.addWidget(always, 2, 0, 1, 3)
-        extras_box = QGroupBox("Extra fields", self)
-        QVBoxLayout(extras_box).addWidget(self.extras)
+        QVBoxLayout(fields_box).addWidget(self.fields)
+        top_row = QHBoxLayout()
+        top_row.addWidget(fields_box, 3)
+        top_row.addWidget(self.regions_box, 2)
+        QVBoxLayout(self.extras_box).addWidget(self.extras)
+        fields_page = QWidget(self)
+        fields_layout = QVBoxLayout(fields_page)
+        fields_layout.addLayout(top_row)
+        fields_layout.addWidget(self.extras_box, 1)
+        self.tabs.addTab(self.ladder, "Ranks")
+        self.tabs.addTab(fields_page, "Fields and regions")
 
-        middle = QHBoxLayout()
-        middle.addWidget(ranks_box, 3)
-        middle.addWidget(regions_box, 1)
         editor = QWidget(self)
         editor_layout = QVBoxLayout(editor)
         editor_layout.addLayout(top)
-        editor_layout.addLayout(middle, 2)
-        editor_layout.addWidget(fields_box)
-        editor_layout.addWidget(extras_box, 1)
+        editor_layout.addWidget(self.tabs, 1)
         editor_layout.addWidget(self.error_label)
 
         splitter = QSplitter(self)
         splitter.addWidget(self.list)
         splitter.addWidget(editor)
-        splitter.setSizes([200, 700])
+        splitter.setSizes([210, 750])
         buttons = QHBoxLayout()
         buttons.addWidget(self.delete_button)
         buttons.addStretch(1)
@@ -129,6 +129,14 @@ class GameSetupDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(splitter, 1)
         layout.addLayout(buttons)
+
+    def _update_tab_titles(self, *_args: object) -> None:
+        """Tab and box titles show how many ranks, regions and extra fields the game has."""
+        regions = [line for line in self.regions.toPlainText().splitlines() if line.strip()]
+        extras = self.extras.table.rowCount()
+        self.tabs.setTabText(RANKS_TAB, f"Ranks ({self.ladder.table.rowCount()})")
+        self.regions_box.setTitle(f"Regions ({len(regions)})")
+        self.extras_box.setTitle(f"Extra fields ({extras})")
 
     # --- list -------------------------------------------------------------------------------
 
@@ -195,8 +203,7 @@ class GameSetupDialog(QDialog):
     def _load_template(self, template: GameTemplate) -> None:
         self.ladder.load(template)
         self.regions.setPlainText("\n".join(template.regions))
-        for key, box in self.field_toggles.items():
-            box.setChecked(template.shows(key))
+        self.fields.load(template)
         self.extras.load(template.custom_fields)
 
     def _fill_from_starter(self) -> None:
@@ -215,8 +222,7 @@ class GameSetupDialog(QDialog):
             best_division_is_one=self.ladder.best_is_one.isChecked(),
             roman_divisions=self.ladder.roman.isChecked(),
             regions=tuple(line for line in lines if line),
-            hidden_fields=frozenset(k for k in OPTIONAL_FIELDS
-                                    if not self.field_toggles[k].isChecked()),
+            hidden_fields=self.fields.hidden(),
             custom_fields=tuple(self.extras.fields()),
         )
 

@@ -247,3 +247,29 @@ QProgressBar::chunk {
     background: #3d7eff;
     border-radius: 3px;
 }
+
+/* ---- Tabs (Game setup) ---- */
+QTabWidget::pane {
+    border: 1px solid #3a3f47;
+    border-radius: 4px;
+    top: -1px;
+    background: #1f2227;
+}
+QTabBar::tab {
+    background: #24282e;
+    color: #9aa0a8;
+    border: 1px solid #3a3f47;
+    border-bottom: none;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    padding: 6px 16px;
+    margin-right: 2px;
+}
+QTabBar::tab:hover {
+    color: #e6e6e6;
+}
+QTabBar::tab:selected {
+    background: #1f2227;
+    color: #e6e6e6;
+    border-top: 2px solid #3d7eff;
+}
