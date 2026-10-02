@@ -43,7 +43,7 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures, core/validation.py signatures | tests/test_paste_assist.py, test_entry_session.py |
 | Clipboard, auto-lock, session lock | security/*, ui/session_guard.py, ui/qt_adapters.py, ui/copy_actions.py | tests/test_clipboard.py, test_autolock.py, tests/ui/test_phase5_ui.py |
 | Backups, export | core/backup.py, core/exporter.py, storage/vault_file.py, ui/backup_dialog.py, ui/export_dialog.py | docs/VAULT_FORMAT.md, ui/app_controller.py (wiring) |
-| Password generator | core/generator.py, ui/generator_dialog.py | tests/test_generator.py |
+| Password or email generator | core/generator.py, core/email_generator.py, ui/generator_dialog.py, ui/email_generator_dialog.py | tests/test_generator.py, test_email_generator.py, tests/ui/test_email_generator_ui.py, ui/widgets/account_form.py (Generate... buttons) |
 | Settings, paths, logging | config/*, ui/settings_dialog.py | ui/app_controller.py (`_open_settings`), ui/session_guard.py (apply_settings) |
 | Packaging, dependencies | packaging/, pyproject.toml, requirements*.txt | |
 | A failing test or bug | the failing test file and the module it tests | modules that one calls |
@@ -144,7 +144,8 @@ vaultkeeper/                       repo root
     config/
       constants.py                 statuses, per-game rank/region presets, defaults, limits
       settings.py                  load/save non-secret settings JSON (incl. window geometry,
-                                   last backup success/failure times, last-saved time per vault);
+                                   last backup success/failure times, last-saved time per vault,
+                                   email generator domain + valid_email_domain);
                                    SettingsFile = current settings + update-and-save
       paths.py                     app-data dir and default file locations
       logging_setup.py             logging config + redaction filter (defense in depth); exception
@@ -173,7 +174,8 @@ vaultkeeper/                       repo root
       vault_disk.py                file on disk vs session: digest, verifier, quarantine_target
                                    (damaged -> .damaged copy; changed elsewhere -> VaultConflictError);
                                    went_back_in_time / remember_saved_at (SEC-M3); shared_folder_risk
-      account_service.py           account CRUD + duplicate detection (warning only)
+      account_service.py           account CRUD + duplicate detection (warning only);
+                                   addresses_in_use (for the email generator)
       game_service.py              add (starter/template) / rename / set_template (never blocked) / delete
       search.py                    AccountFilter, free-text search (never secrets), facets, rank sort key
       backup.py                    rotating backups (byte copies of the encrypted vault), keep N;
@@ -184,6 +186,7 @@ vaultkeeper/                       repo root
                                    starting_game_id (sidebar game first, else last batch game)
       paste_assist.py              paste block -> field suggestions (pure, never saves)
       generator.py                 password generator (secrets only)
+      email_generator.py           gamename.k7q4@domain (secrets only), skips addresses in use
     crypto/
       kdf.py                       Argon2id derivation + param bounds
       cipher.py                    AES-256-GCM via cryptography's AESGCM
@@ -235,8 +238,10 @@ vaultkeeper/                       repo root
                                    batch values, counter, paste box, Ctrl+Enter anywhere
       settings_dialog.py           File -> Settings (Ctrl+,): auto-lock/Quick Add timeouts, clipboard
                                    seconds, lock switches, show-passwords seconds, screen-capture
-                                   exclusion, restore defaults, Backups... button
+                                   exclusion, email generator domain, restore defaults, Backups...
       generator_dialog.py          password generator (copy or "use" into the form)
+      email_generator_dialog.py    email generator (asks the game name; copy or "use" into the
+                                   form) + EmailGeneratorLauncher (domain, vault addresses, copy)
       file_pickers.py              choose_folder / choose_save_file / choose_open_file /
                                    choose_image_file (.ico/.png): Qt's own
                                    (non-native) dialog, so auto-lock sees activity and lock
@@ -258,7 +263,8 @@ vaultkeeper/                       repo root
         game_sidebar.py            "All games" + games with counts
         search_bar.py              free text + status/rank/region/label dropdowns -> AccountFilter;
                                    rank pictures only when one game is selected
-        account_form.py            form built from the game template (hidden fields, extra fields)
+        account_form.py            form built from the game template (hidden fields, extra fields);
+                                   Generate... buttons for password and email
         ladder_editor.py           rank list editor: tall table (tiers + divisions + pictures),
                                    actions + picture preview on the right, division style
         field_toggles.py           Game setup checkboxes: which optional standard fields show
@@ -312,7 +318,8 @@ vaultkeeper/                       repo root
     test_rank_image.py             rank picture PNG check, base64 round trip
     test_backup.py                 copies, rotation, paths; test_backup_status.py: failures,
                                    password-change helpers, prepare/run/finish
-    test_exporter.py, test_clipboard.py, test_autolock.py, test_generator.py
+    test_exporter.py, test_clipboard.py, test_autolock.py, test_generator.py,
+    test_email_generator.py
     test_entry_session.py, test_paste_assist.py
     ui/                            pytest-qt: test_qt_adapters, test_unlock_dialog (never-silent
                                    backup, no freeze, closable while busy), test_create_vault_dialog,
@@ -342,7 +349,8 @@ vaultkeeper/                       repo root
                                    test_secret_field (clear() wipes undo in all password dialogs),
                                    test_rank_pictures (file -> picture, set/remove, add form, save),
                                    test_rank_pictures_shown (table, rank picker, search filter),
-                                   test_game_setup_layout (tabs + counts, field toggles, preview)
+                                   test_game_setup_layout (tabs + counts, field toggles, preview),
+                                   test_email_generator_ui (dialog, form button, Tools menu, domain)
 ```
 
 ---
@@ -494,6 +502,7 @@ grep it when a task touches an earlier choice, and record new decisions there.
 Since then (2026-10-02): rank pictures (schema v3), the Game setup redesign (tabs) and
 Phase 8e, the Windows .exe (`packaging/vaultkeeper.spec`, build command in README; choices
 in docs/DECISIONS.md). All planned phases are done. Rebuild the .exe after code changes.
+Email generator added (gamename.k7q4@domain, domain in Settings; see docs/DECISIONS.md).
 
 ### Work rules for a list of tasks or fixes
 Do them in the agreed order, ONE COMMIT PER TASK. For each one: check whether it's already

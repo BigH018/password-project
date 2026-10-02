@@ -190,6 +190,8 @@ DEFAULT_SHOW_PASSWORDS_SECONDS = 30  # "Show passwords" switches itself off (SEC
 DEFAULT_EXCLUDE_FROM_CAPTURE = False  # Windows: hide windows from screenshots/sharing
 DEFAULT_BACKUP_KEEP = 10
 DEFAULT_BACKUP_MIN_INTERVAL_MINUTES = 10
+DEFAULT_EMAIL_DOMAIN = "example.com"  # email generator: gamename.k7q4@<domain>
+MAX_EMAIL_DOMAIN = 120  # keeps the longest generated address well under MAX_EMAIL
 
 # Allowed ranges for user-configurable settings (inclusive).
 CLIPBOARD_CLEAR_SECONDS_RANGE = (5, 300)

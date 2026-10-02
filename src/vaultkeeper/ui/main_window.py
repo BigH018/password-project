@@ -19,6 +19,7 @@ from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui.account_dialog import AccountDialog
 from vaultkeeper.ui.accounts_view import AccountsPanel
 from vaultkeeper.ui.copy_actions import CopyActions
+from vaultkeeper.ui.email_generator_dialog import EmailGeneratorLauncher
 from vaultkeeper.ui.game_setup_dialog import GameSetupDialog
 from vaultkeeper.ui.generator_dialog import GeneratorDialog
 from vaultkeeper.ui.main_menus import install_toolbar_and_menus
@@ -72,6 +73,8 @@ class MainWindow(QMainWindow):
         self.backup_failed.hide()
         self.panel = AccountsPanel(self)
         self.copy = CopyActions(self, self.panel, self._game_by_id)
+        self.email_tools = EmailGeneratorLauncher(
+            self._addresses_in_use, lambda email: self.copy.copy_value(email, "Email"))
         self.locked_label = plain_label("Locked", self)
         self.locked_label.setAlignment(Qt.AlignCenter)
         self.locked_label.setStyleSheet(MUTED_STYLE)
@@ -110,11 +113,13 @@ class MainWindow(QMainWindow):
         self.manage_games_action = action("Game setup...")
         self.quit_action = action("&Quit", "Ctrl+Q")
         self.generator_action = action("Generate password...", "Ctrl+G")
+        self.email_generator_action = action("Generate email...", "Ctrl+Shift+G")
         self.backups_action = action("Backups...")
         self.backup_now_action = action("Backup now")
         self.export_action = action("Export encrypted copy...")
         self.settings_action = action("&Settings...", "Ctrl+,")
         self.generator_action.triggered.connect(self._open_generator)
+        self.email_generator_action.triggered.connect(self._open_email_generator)
         self.backups_action.triggered.connect(self.backups_requested)
         self.backup_now_action.triggered.connect(self.backup_now_requested)
         self.export_action.triggered.connect(self.export_requested)
@@ -180,7 +185,7 @@ class MainWindow(QMainWindow):
         unlocked = self.unlocked
         for act in (self.lock_action, self.change_password_action, self.show_passwords_action,
                     self.add_action, self.quick_add_action, self.manage_games_action,
-                    self.backups_action,
+                    self.backups_action, self.email_generator_action,
                     self.backup_now_action, self.export_action):
             act.setEnabled(unlocked)
         selected = unlocked and self.panel.selected_account() is not None
@@ -215,6 +220,13 @@ class MainWindow(QMainWindow):
         run_modal(GeneratorDialog(copy=lambda pw: self.copy.copy_value(pw, "Password"),
                                   parent=self))
 
+    def _addresses_in_use(self) -> frozenset[str]:
+        return self._accounts.addresses_in_use() if self._accounts else frozenset()
+
+    def _open_email_generator(self) -> None:
+        game = self._game_by_id(self.panel.sidebar.current_game_id() or "")
+        self.email_tools.open(game.name if game else "", parent=self)
+
     def changeEvent(self, event: QEvent) -> None:
         """Report minimizing (auto-lock on minimize)."""
         super().changeEvent(event)
@@ -244,7 +256,8 @@ class MainWindow(QMainWindow):
         if not games or self._accounts is None:
             return
         dialog = AccountDialog(self._accounts, games,
-                               default_game_id=self.panel.sidebar.current_game_id(), parent=self)
+                               default_game_id=self.panel.sidebar.current_game_id(), parent=self,
+                               pick_email=self.email_tools.pick)
         if run_modal(dialog) and dialog.saved is not None:
             self._after_save(dialog.saved.id)
 
@@ -254,7 +267,7 @@ class MainWindow(QMainWindow):
             return
         dialog = QuickAddDialog(self._accounts, games, self.entry_session,
                                 default_game_id=self.panel.sidebar.current_game_id(),
-                                parent=self)
+                                parent=self, pick_email=self.email_tools.pick)
         dialog.saved_one.connect(lambda acc: self._after_save(acc.id))
         self.quick_add_opened.emit()  # longer auto-lock timeout while it's open
         try:
@@ -267,7 +280,7 @@ class MainWindow(QMainWindow):
         if account is None or self._accounts is None or self._games is None:
             return
         dialog = AccountDialog(self._accounts, self._games.list_games(), account=account,
-                               parent=self)
+                               parent=self, pick_email=self.email_tools.pick)
         if run_modal(dialog) and dialog.saved is not None:
             self._after_save(dialog.saved.id)
 

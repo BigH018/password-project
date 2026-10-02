@@ -84,6 +84,7 @@ class AppController(QObject):
         self._reported_damaged: Path | None = None
         self.window = MainWindow(demo=demo)
         self.window.restore_geometry_text(settings.window_geometry)  # shown after unlock
+        self.window.email_tools.domain = settings.email_domain
         self.window.lock_requested.connect(self.lock)
         self.window.quit_requested.connect(self.quit)
         self.window.change_password_requested.connect(self._change_password)
@@ -342,6 +343,7 @@ class AppController(QObject):
         saved = self.settings.update(**dialog.values())
         self.guard.apply_settings(self.settings.current)
         self.window.panel.set_reveal_seconds(self.settings.current.show_passwords_seconds)
+        self.window.email_tools.domain = self.settings.current.email_domain
         if saved:
             self.window.statusBar().showMessage("Settings saved.", 4000)
         else:

@@ -131,6 +131,17 @@ class AccountService:
         apply_change(self._store, change)
         log.info("Account deleted id=%s", account_id)
 
+    def addresses_in_use(self) -> frozenset[str]:
+        """Every email, recovery email and login saved in the vault, trimmed and lowercased.
+
+        The email generator avoids these.
+        """
+        return frozenset(
+            _norm(value) for account in self._data.accounts
+            for value in (account.email, account.recovery_email, account.login_username)
+            if value
+        )
+
     # --- duplicates -------------------------------------------------------------------------
 
     def find_duplicates(self, candidate: Account) -> list[DuplicateMatch]:

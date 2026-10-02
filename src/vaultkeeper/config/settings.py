@@ -1,6 +1,7 @@
 """Non-secret user settings, stored as JSON in the app data directory.
 
-Settings never contain account data or secrets: only paths, timeouts, UI preferences
+Settings never contain account data or secrets: only paths, timeouts, UI preferences, the
+email generator's domain
 (including the main window's size/position as an opaque base64 blob) and backup status times.
 Loading is forgiving. A missing, corrupt or out-of-range value falls back to its default,
 so a broken settings file can never stop the app from starting.
@@ -12,6 +13,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import string
 from dataclasses import asdict, dataclass, field, fields, replace
 from datetime import datetime
@@ -29,6 +31,7 @@ MAX_GEOMETRY_LENGTH = 2048
 MAX_TIMESTAMP_LENGTH = 40
 _BASE64_CHARS = frozenset(string.ascii_letters + string.digits + "+/=")
 _NEW_FILE = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+_DOMAIN_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +49,7 @@ class Settings:
     lock_on_session_lock: bool = c.DEFAULT_LOCK_ON_SESSION_LOCK
     show_passwords_seconds: int = c.DEFAULT_SHOW_PASSWORDS_SECONDS
     exclude_from_capture: bool = c.DEFAULT_EXCLUDE_FROM_CAPTURE
+    email_domain: str = c.DEFAULT_EMAIL_DOMAIN  # email generator: gamename.k7q4@<domain>
     window_geometry: str | None = None  # Qt saveGeometry() as base64; None = default size
     backup_last_success: str | None = None  # UTC ISO-8601 of the last good backup
     backup_last_failure: str | None = None  # set until a backup succeeds again
@@ -64,6 +68,20 @@ _INT_RANGES: dict[str, tuple[int, int]] = {
 _BOOL_FIELDS = frozenset({"lock_on_minimize", "lock_on_session_lock", "exclude_from_capture"})
 _PATH_FIELDS = frozenset({"vault_path", "backup_dir"})
 _TIMESTAMP_FIELDS = frozenset({"backup_last_success", "backup_last_failure"})
+
+
+def valid_email_domain(value: Any) -> bool:
+    """A lowercase host name like ``example.test``: two or more dot-separated labels of
+    a-z, 0-9 and inner hyphens, at most ``MAX_EMAIL_DOMAIN`` characters."""
+    if not isinstance(value, str) or not 0 < len(value) <= c.MAX_EMAIL_DOMAIN:
+        return False
+    labels = value.split(".")
+    return len(labels) >= 2 and all(_DOMAIN_LABEL.fullmatch(label) for label in labels)
+
+
+def normalize_email_domain(text: str) -> str:
+    """A typed domain in stored form: trimmed, lowercase, without a leading "@"."""
+    return text.strip().removeprefix("@").lower()
 
 
 def _valid_path(value: Any) -> bool:
@@ -106,6 +124,8 @@ def _valid_value(name: str, value: Any) -> bool:
         return _valid_timestamp(value)
     if name == "vault_last_saved":
         return _valid_last_saved(value)
+    if name == "email_domain":
+        return valid_email_domain(value)
     if name in _PATH_FIELDS:
         return _valid_path(value)
     if name in _BOOL_FIELDS:

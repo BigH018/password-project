@@ -10,7 +10,7 @@ from vaultkeeper.errors import VaultKeeperError
 from vaultkeeper.ui import messages
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import ERROR_STYLE
-from vaultkeeper.ui.widgets.account_form import AccountForm
+from vaultkeeper.ui.widgets.account_form import AccountForm, PickEmail
 
 DUPLICATE_STYLE = "color: #ffcf6e;"
 
@@ -26,6 +26,7 @@ class AccountDialog(QDialog):
         default_game_id: str | None = None,
         parent: QWidget | None = None,
         draft: Account | None = None,
+        pick_email: PickEmail | None = None,
     ) -> None:
         super().__init__(parent)
         self._accounts = accounts
@@ -38,7 +39,8 @@ class AccountDialog(QDialog):
         self.setWindowTitle("Add account" if self._is_new else "Edit account")
         self.setMinimumWidth(520)
 
-        self.form = AccountForm(games, require_game_choice=must_choose, parent=self)
+        self.form = AccountForm(games, require_game_choice=must_choose, parent=self,
+                                pick_email=pick_email)
         self.form.load(self._base, select_game=not must_choose)
         self.duplicate_label = plain_label(parent=self)
         self.duplicate_label.setStyleSheet(DUPLICATE_STYLE)

@@ -1,4 +1,5 @@
-"""Settings: auto-lock timeouts, clipboard clearing, lock switches, and a way to Backups.
+"""Settings: auto-lock timeouts, clipboard clearing, lock switches, the email generator's
+domain, and a way to Backups.
 
 Thin: the dialog only collects values. Ranges come from ``config.constants`` and the
 controller validates, saves and applies them (``config.settings``, ``SessionGuard``).
@@ -15,6 +16,7 @@ from PyQt5.QtWidgets import (
     QDialog,
     QFormLayout,
     QHBoxLayout,
+    QLineEdit,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -22,9 +24,9 @@ from PyQt5.QtWidgets import (
 )
 
 from vaultkeeper.config import constants as c
-from vaultkeeper.config.settings import Settings
+from vaultkeeper.config.settings import Settings, normalize_email_domain, valid_email_domain
 from vaultkeeper.ui.safe_text import plain_label
-from vaultkeeper.ui.theme import MUTED_STYLE
+from vaultkeeper.ui.theme import ERROR_STYLE, MUTED_STYLE
 
 # The settings this dialog edits (backup settings live in the Backups dialog).
 EDITED_FIELDS = (
@@ -35,6 +37,7 @@ EDITED_FIELDS = (
     "lock_on_session_lock",
     "show_passwords_seconds",
     "exclude_from_capture",
+    "email_domain",
 )
 
 
@@ -73,6 +76,11 @@ class SettingsDialog(QDialog):
             "Hide Account Manager from screenshots and screen sharing (Windows)", self)
         self.capture_check.setChecked(settings.exclude_from_capture)
         self.capture_check.setEnabled(sys.platform == "win32")
+        self.domain_edit = QLineEdit(settings.email_domain, self)
+        self.domain_edit.setPlaceholderText(c.DEFAULT_EMAIL_DOMAIN)
+        self.domain_edit.setToolTip("Generated emails look like gamename.k7q4@<this domain>")
+        self.error_label = plain_label(parent=self)
+        self.error_label.setStyleSheet(ERROR_STYLE)
         note = plain_label(
             "Locking clears the window and any password still on the clipboard.", self)
         note.setWordWrap(True)
@@ -90,6 +98,7 @@ class SettingsDialog(QDialog):
         form.addRow("While Quick Add is open", self.quick_add_spin)
         form.addRow("Clear copied passwords after", self.clipboard_spin)
         form.addRow("Hide shown passwords after", self.reveal_spin)
+        form.addRow("Email generator domain", self.domain_edit)
         buttons = QHBoxLayout()
         buttons.addWidget(self.backups_button)
         buttons.addWidget(self.defaults_button)
@@ -102,11 +111,13 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.session_check)
         layout.addWidget(self.capture_check)
         layout.addWidget(note)
+        layout.addWidget(self.error_label)
         layout.addLayout(buttons)
 
         self.backups_button.clicked.connect(self._backups)
         self.defaults_button.clicked.connect(self.restore_defaults)
-        self.save_button.clicked.connect(self.accept)
+        self.save_button.clicked.connect(self._save)
+        self.domain_edit.textChanged.connect(self.error_label.clear)
         self.cancel_button.clicked.connect(self.reject)
 
     def values(self) -> dict[str, Any]:
@@ -119,6 +130,7 @@ class SettingsDialog(QDialog):
             "lock_on_session_lock": self.session_check.isChecked(),
             "show_passwords_seconds": self.reveal_spin.value(),
             "exclude_from_capture": self.capture_check.isChecked(),
+            "email_domain": normalize_email_domain(self.domain_edit.text()),
         }
 
     def restore_defaults(self) -> None:
@@ -131,6 +143,15 @@ class SettingsDialog(QDialog):
         self.session_check.setChecked(d.lock_on_session_lock)
         self.reveal_spin.setValue(d.show_passwords_seconds)
         self.capture_check.setChecked(d.exclude_from_capture)
+        self.domain_edit.setText(d.email_domain)
+
+    def _save(self) -> None:
+        """Accept only with a usable domain (the other controls can't hold bad values)."""
+        if not valid_email_domain(self.values()["email_domain"]):
+            self.error_label.setText("Email generator domain: enter a domain like example.com.")
+            self.domain_edit.setFocus()
+            return
+        self.accept()
 
     def _backups(self) -> None:
         if self._open_backups is not None:

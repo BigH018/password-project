@@ -14,9 +14,11 @@ from vaultkeeper.config.settings import (
     Settings,
     SettingsFile,
     load_settings,
+    normalize_email_domain,
     save_settings,
     settings_from_dict,
     update_settings,
+    valid_email_domain,
 )
 from vaultkeeper.errors import ValidationError
 
@@ -231,3 +233,30 @@ def test_reveal_and_capture_settings(tmp_path: Path) -> None:
     for bad in (low - 1, high + 1, "30", True):
         assert settings_from_dict({"show_passwords_seconds": bad}).show_passwords_seconds == 30
     assert settings_from_dict({"exclude_from_capture": "yes"}).exclude_from_capture is False
+
+
+# --- email generator domain ------------------------------------------------------------------
+
+
+def test_email_domain_setting(tmp_path: Path) -> None:
+    assert Settings().email_domain == c.DEFAULT_EMAIL_DOMAIN == "example.com"
+    path = tmp_path / "settings.json"
+    save_settings(path, Settings(email_domain="mail.example.test"))
+    assert load_settings(path).email_domain == "mail.example.test"
+    for bad in ("", "localhost", "Example.test", "a b.test", "-x.test", 5, None):
+        assert settings_from_dict({"email_domain": bad}).email_domain == "example.com"
+    with pytest.raises(ValidationError):
+        update_settings(Settings(), email_domain="not a domain")
+
+
+@pytest.mark.parametrize(("typed", "stored"), [
+    ("  @Example.TEST ", "example.test"), ("example.com", "example.com"), ("", ""),
+])
+def test_normalize_email_domain(typed: str, stored: str) -> None:
+    assert normalize_email_domain(typed) == stored
+
+
+def test_valid_email_domain_length_limit() -> None:
+    label = "a" * 57
+    assert valid_email_domain(f"{label}.{label}.test")  # 120 characters
+    assert not valid_email_domain(f"{label}a.{label}.test")  # 121

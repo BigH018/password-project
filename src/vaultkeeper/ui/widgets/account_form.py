@@ -7,6 +7,7 @@ through unchanged, so nothing is deleted silently. Validation happens in core on
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
@@ -33,6 +34,8 @@ from vaultkeeper.ui.widgets.rank_picker import NOT_IN_LIST, RankPicker, RegionPi
 from vaultkeeper.ui.widgets.secret_field import SecretField
 
 ExtraWidget = QLineEdit | QComboBox | SecretField
+# (game name, parent) -> a generated email, or "" if the user closed the generator.
+PickEmail = Callable[[str, QWidget], str]
 
 
 class AccountForm(QWidget):
@@ -41,9 +44,10 @@ class AccountForm(QWidget):
     changed = pyqtSignal()
 
     def __init__(self, games: list[Game], require_game_choice: bool = False,
-                 parent: Any = None) -> None:
+                 parent: Any = None, pick_email: PickEmail | None = None) -> None:
         super().__init__(parent)
         self._games = {g.id: g for g in games}
+        self._pick_email = pick_email
         self._base_game_id = ""
         self._base_extra: dict[str, str] = {}
         self._base_rank, self._base_region = Rank(), None  # the stored account's values
@@ -65,6 +69,9 @@ class AccountForm(QWidget):
         self.generate_button = QPushButton("Generate...", self)
         self.generate_button.setToolTip("Create a strong random password")
         self.email = QLineEdit(self)
+        self.generate_email_button = QPushButton("Generate...", self)
+        self.generate_email_button.setToolTip("Create a new gamename.random@domain address")
+        self.generate_email_button.setVisible(pick_email is not None)
         self.email_password = SecretField("Email password (optional)", self)
         self.email_url = QLineEdit(self)
         self.email_url.setPlaceholderText("https://... (optional, copy-only)")
@@ -90,11 +97,14 @@ class AccountForm(QWidget):
         password_row = QHBoxLayout()
         password_row.addWidget(self.password, 1)
         password_row.addWidget(self.generate_button)
+        email_row = QHBoxLayout()
+        email_row.addWidget(self.email, 1)
+        email_row.addWidget(self.generate_email_button)
         self.form = QFormLayout(self)
         self.form.setContentsMargins(0, 0, 0, 0)
         for label, widget in (
             ("Game", self.game), ("Name", name_row), ("Login", self.login),
-            ("Password", password_row), ("Email", self.email),
+            ("Password", password_row), ("Email", email_row),
             ("Email password", self.email_password), ("Email login URL", self.email_url),
             ("Region", self.region), ("Rank", self.rank), ("Status", self.status),
             ("Recovery email", self.recovery_email), ("Labels", self.tags), ("Notes", self.notes),
@@ -111,6 +121,7 @@ class AccountForm(QWidget):
         self.game.currentIndexChanged.connect(self._game_changed)
         self.display_name.editingFinished.connect(self._split_name_and_tag)
         self.generate_button.clicked.connect(self._generate_password)
+        self.generate_email_button.clicked.connect(self._generate_email)
         for edit in (self.display_name, self.tag, self.login, self.email, self.email_url,
                      self.recovery_email, self.tags):
             edit.textChanged.connect(self.changed)
@@ -132,6 +143,13 @@ class AccountForm(QWidget):
         dialog = GeneratorDialog(allow_use=True, parent=self)
         if run_modal(dialog) and dialog.password:
             self.password.setText(dialog.password)
+
+    def _generate_email(self) -> None:
+        game = self.current_game
+        if self._pick_email is not None:
+            email = self._pick_email(game.name if game else "", self)
+            if email:
+                self.email.setText(email)
 
     # --- game / template --------------------------------------------------------------------
 

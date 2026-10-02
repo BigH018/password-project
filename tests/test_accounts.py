@@ -185,3 +185,12 @@ def test_add_splits_name_and_tag_typed_together(store: FakeStore, valorant: Game
     service = AccountService(store)
     stored = service.add(make_account(valorant, display_name="FakePlayer#TEST", tag=None))
     assert (stored.display_name, stored.tag) == ("FakePlayer", "TEST")
+
+
+def test_addresses_in_use(accounts: AccountService, valorant: Game) -> None:
+    assert accounts.addresses_in_use() == frozenset()
+    accounts.add(_draft(accounts, valorant, email=" Player1@Example.test "))
+    accounts.add(replace(_draft(accounts, valorant, login_username="Fake_Login_2", email=""),
+                         recovery_email="recovery2@example.test"))
+    assert accounts.addresses_in_use() == {
+        "player1@example.test", "fake_login_1", "fake_login_2", "recovery2@example.test"}

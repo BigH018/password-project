@@ -38,3 +38,4 @@ def install_toolbar_and_menus(window: MainWindow) -> None:
     games_menu.addAction(window.manage_games_action)
     tools_menu = window.menuBar().addMenu("&Tools")
     tools_menu.addAction(window.generator_action)
+    tools_menu.addAction(window.email_generator_action)

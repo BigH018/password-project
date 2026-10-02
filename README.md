@@ -97,6 +97,9 @@ never leaves your machine, and the app contains no networking code at all.
 - Locking wipes the decrypted data from the window, closes every dialog and **hides the main
   window** until the master password is entered again.
 - **Password generator** (`Ctrl+G`) using Python's cryptographically secure `secrets` module.
+- **Email generator** (`Ctrl+Shift+G`, or *Generate...* next to the Email field): makes a new
+  address like `valorant.k7q4@yourdomain` for the game (random part from `secrets`, no
+  look-alike characters), never one already saved in the vault. The domain is a setting.
 
 ### Your data is safe
 - **Rotating encrypted backups** to a folder you choose (ideally another drive), keeping the
@@ -212,6 +215,7 @@ by mistake. The build uses the same settings, logs and vault location as `python
 | `Ctrl+C` | Copy password |
 | `Ctrl+E` | Copy email |
 | `Ctrl+G` | Password generator |
+| `Ctrl+Shift+G` | Email generator |
 | `Ctrl+,` | Settings |
 | `Ctrl+L` | Lock now |
 | `Ctrl+Q` | Quit |
@@ -307,6 +311,7 @@ Open *File -> Settings...* (`Ctrl+,`). Changes apply immediately, with no restar
 | Lock when Windows locks | On | |
 | Hide shown passwords after | 30 s | 5-600 s |
 | Hide from screenshots and screen sharing (Windows) | Off | |
+| Email generator domain | example.com (set your own) | any domain |
 | Backups: keep newest / at most one per | 10 / 10 min | 1-100 / 0-1440 min |
 
 | What | Where (Windows) |

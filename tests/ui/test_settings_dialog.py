@@ -159,3 +159,13 @@ def test_guard_shutdown_stops_timer_and_activity_filter(qapp: Any) -> None:
     guard.shutdown()
     qapp.sendEvent(target, QKeyEvent(QEvent.KeyPress, 0x41, Qt.NoModifier))
     assert seen == [True] and not guard._timer.isActive()
+
+
+def test_email_domain_applies_to_the_generator(qtbot: Any, tmp_path: Path, monkeypatch: Any,
+                                              chosen: dict[str, Any]) -> None:
+    ctrl = _controller(qtbot, tmp_path / "settings.json", monkeypatch, True,
+                       {**chosen, "email_domain": "mail.example.test"})
+    assert ctrl.window.email_tools.domain == "example.com"  # from the settings at start
+    ctrl._open_settings()
+    assert ctrl.window.email_tools.domain == "mail.example.test"
+    assert load_settings(tmp_path / "settings.json").email_domain == "mail.example.test"

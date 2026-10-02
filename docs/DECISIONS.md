@@ -177,6 +177,18 @@ is when the user decided. Add new decisions here.
   from `vaultkeeper.__version__`). No UPX, no admin rights, normal optimization level (the
   code has asserts). Not code-signed: SmartScreen "Run anyway" on first start. About
   100 MB per folder (mostly Qt).
+- Email generator (user, 2026-10-02): `gamename.random@domain`, e.g. `valorant.k7q4@example.com`.
+  Game name: lowercase, only a-z and 0-9 kept, `acct` if nothing is left (cut so the part
+  before "@" stays <= 64). Random part: 4 characters by default (4-16 in the dialog) from a-z
+  and 2-9 without l and o, drawn with `secrets`. Regenerated while it matches any email,
+  recovery email or login already in the vault (trimmed, ignoring case); gives up with a
+  message after 1000 tries. Domain is a setting (`email_domain`, default `example.com`, File ->
+  Settings), checked as a lowercase host name with at least one dot, <= 120 characters.
+  Opened from Tools -> Generate email... (`Ctrl+Shift+G`: copy only) and from a "Generate..."
+  button next to the account form's Email field ("Use this email" fills the field; it is saved
+  with the rest of the entry, password included, when the user presses Save). The game name
+  is pre-filled from the form's game (Tools menu: the selected sidebar game) and editable.
+  Copy uses the normal clipboard guard (auto-cleared like other copies).
 
 ## Known issues and deferred items
 
@@ -201,7 +213,8 @@ is when the user decided. Add new decisions here.
   with the user's OK.
 - **Source files over ~300 lines** (flagged, split only with the user's OK):
   `ui/app_controller.py` (394: move the backup/export wiring into its own class),
-  `core/vault_service.py` (319), `core/backup.py` (306), `ui/main_window.py` (300).
+  `core/vault_service.py` (319), `core/backup.py` (306), `ui/main_window.py` (313),
+  `ui/widgets/account_form.py` (311).
 - **File pickers are Qt's own dialogs** (CR-L5). Trade-off accepted: they don't look like
   Windows Explorer (no Quick Access pins, no Explorer previews).
 - **Manual checks the automated tests can't do:** copied passwords don't appear in Win+V

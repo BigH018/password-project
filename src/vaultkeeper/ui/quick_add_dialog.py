@@ -29,6 +29,7 @@ from vaultkeeper.core.paste_assist import PasteSuggestions, suggest
 from vaultkeeper.ui.account_dialog import AccountDialog
 from vaultkeeper.ui.safe_text import plain_label
 from vaultkeeper.ui.theme import MUTED_STYLE
+from vaultkeeper.ui.widgets.account_form import PickEmail
 
 COUNTER_STYLE = "color: #8fd18f; font-weight: bold;"
 
@@ -39,11 +40,13 @@ class QuickAddDialog(AccountDialog):
     saved_one = pyqtSignal(object)
 
     def __init__(self, accounts: AccountService, games: list[Game], session: EntrySession,
-                 default_game_id: str | None = None, parent: QWidget | None = None) -> None:
+                 default_game_id: str | None = None, parent: QWidget | None = None,
+                 pick_email: PickEmail | None = None) -> None:
         self._session = session
         game_id = session.starting_game_id(default_game_id)
         draft = session.next_draft(accounts.new_draft(game_id)) if game_id else None
-        super().__init__(accounts, games, default_game_id=game_id, parent=parent, draft=draft)
+        super().__init__(accounts, games, default_game_id=game_id, parent=parent, draft=draft,
+                         pick_email=pick_email)
         self.setWindowTitle("Quick Add")
         self.setMinimumWidth(600)
         self.save_button.setText("Save && next (Enter)")
