@@ -17,6 +17,11 @@ encrypted file on your own PC. No cloud, no sync, no network: ever.
 ![Tests](https://img.shields.io/badge/tests-1000%2B%20passing-success)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
+### [Download for Windows](https://github.com/BigH018/password-project/releases/latest)
+
+<sub>No Python or installing needed: unzip and run. Step-by-step guide:
+[Getting started](#getting-started).</sub>
+
 <img src="docs/images/main-window.png" alt="Main window with fake demo accounts" width="900">
 
 <sub>All screenshots use the built-in demo mode: every account shown is fake.</sub>
@@ -100,6 +105,7 @@ never leaves your machine, and the app contains no networking code at all.
 - **Email generator** (`Ctrl+Shift+G`, or *Generate...* next to the Email field): makes a new
   address like `valorant.k7q4@yourdomain` for the game (random part from `secrets`, no
   look-alike characters), never one already saved in the vault. The domain is a setting.
+  Only useful if you own a domain that accepts mail to any address (see [FAQ](#faq)).
 
 ### Your data is safe
 - **Rotating encrypted backups** to a folder you choose (ideally another drive), keeping the
@@ -135,12 +141,44 @@ never leaves your machine, and the app contains no networking code at all.
 
 ## Getting started
 
-### Requirements
-- **Windows 10 or 11** (the app is cross-platform where it costs nothing, but Windows is the
-  tested target).
-- **Python 3.11 or newer** ([python.org](https://www.python.org/downloads/)).
+There are two ways to get the app. **Most people want option A.**
 
-### Install
+### Option A: download the app (easiest, no Python needed)
+
+1. Go to the **[latest release](https://github.com/BigH018/password-project/releases/latest)**.
+2. Under **Assets**, click `Account-Manager-<version>-windows.zip` to download it.
+3. Open your Downloads folder, **right-click the zip -> Extract All... -> Extract**.
+   Move the extracted `Account Manager` folder wherever you like (for example your Desktop
+   or `Documents`).
+4. Open the folder and double-click **`Account Manager.exe`**.
+5. Windows will probably say **"Windows protected your PC"**. That's because the app isn't
+   code-signed (that needs a paid certificate), not because something is wrong. Click **More info -> Run anyway**.
+   You only need to do this once.
+6. Optional: right-click `Account Manager.exe` -> **Show more options -> Pin to taskbar**
+   (or **Send to -> Desktop (create shortcut)**).
+
+Then follow [First-time setup](#first-time-setup) below.
+
+> **Keep the whole folder together.** `Account Manager.exe` needs the `_internal` folder
+> next to it. Don't move the .exe out on its own: use a shortcut instead.
+
+**Updating to a newer version:** close the app, download the new zip, and replace the old
+`Account Manager` folder with the new one. Your vault, backups and settings are stored
+elsewhere (see [where files live](#settings-and-where-files-live)), so nothing is lost.
+
+**Want to look around first?** Try demo mode with fake accounts: make a shortcut to
+`Account Manager.exe`, right-click it -> **Properties**, add ` --demo` to the end of
+**Target** (after the closing quote) and open the shortcut. The demo password is `test`.
+Nothing real is touched and the demo is deleted when you close it.
+
+Some antivirus programs wrongly flag apps made with PyInstaller. If yours does, you can
+check the code here and build the app yourself (option B).
+
+### Option B: run from source (for developers)
+
+You need **Windows 10 or 11** (the app is cross-platform where it costs nothing, but
+Windows is the tested target) and **Python 3.11 or newer**
+([python.org](https://www.python.org/downloads/)).
 
 ```powershell
 git clone https://github.com/BigH018/password-project.git
@@ -150,24 +188,20 @@ py -3.11 -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt -r requirements-dev.txt
 pip install -e .
+
+python -m vaultkeeper          # start the app
+python -m vaultkeeper --demo   # try it with fake accounts (nothing real is touched)
 ```
 
 All dependencies are pinned to exact versions in `requirements.txt` and
 `requirements-dev.txt`.
 
-### Run
-
-```powershell
-python -m vaultkeeper          # start the app
-python -m vaultkeeper --demo   # try it with fake accounts (nothing real is touched)
-```
-
 **Demo mode** creates a temporary vault full of obviously fake accounts in your system temp
 folder, with its own settings and logs. The demo master password is `test` (allowed only
-for the throwaway demo; real vaults need a strong one). Everything is deleted when you quit, and your real settings and
-vault are never touched.
+for the throwaway demo; real vaults need a strong one). Everything is deleted when you quit,
+and your real settings and vault are never touched.
 
-### Build the Windows .exe
+#### Build the Windows .exe yourself
 
 ```powershell
 pyinstaller packaging/vaultkeeper.spec --noconfirm --clean --distpath "$env:USERPROFILE\Desktop"
@@ -179,9 +213,8 @@ This makes two one-folder programs (no Python needed to run them):
 - `Account Manager (console)\Account Manager (console).exe`: the same app with a console
   window, only for troubleshooting. Safe to delete.
 
-The .exe isn't code-signed, so Windows SmartScreen shows "Windows protected your PC" the
-first time: click **More info -> Run anyway**. Some antivirus programs flag PyInstaller apps
-by mistake. The build uses the same settings, logs and vault location as `python -m vaultkeeper`.
+Close the app before rebuilding: Windows won't let the build replace a running .exe. The
+build uses the same settings, logs and vault location as `python -m vaultkeeper`.
 
 ---
 
@@ -198,6 +231,7 @@ by mistake. The build uses the same settings, logs and vault location as `python
 4. **Set up your games:** *Games -> Game setup...* Start from a built-in starter or a blank
    template, then adjust ranks, regions and extra fields to taste.
 5. **Add accounts quickly** with **Quick Add** (`Ctrl+Shift+N`): type, press Enter, repeat.
+   Copy a login or password later by selecting the account and pressing `Ctrl+B` / `Ctrl+C`.
 6. Once everything is in the vault, **delete any old plaintext text files** that held your
    passwords.
 
@@ -403,6 +437,17 @@ The clipboard clears itself afterwards.
 **What happens if the app crashes mid-save?**
 Nothing is lost. Saves go to a temporary file that is verified before it replaces the vault,
 and the previous version is kept as `.bak`.
+
+**How does the email generator work? Do I need it?**
+You don't need it: you can always type your normal email. The generator makes up a fresh
+address like `valorant.k7q4@yourdomain.com` for each account. That only works if you **own
+a domain** whose email is set up to accept mail sent to *any* address on it (often called a
+"catch-all"). Without that, the game's verification and password-reset emails go nowhere.
+If you do have one, enter it once in *File -> Settings -> Email generator domain*.
+
+**Can my friends and I share one vault?**
+Each person should have their own app and their own vault with their own master password.
+Don't share your master password with anyone.
 
 **Is it safe to keep backups on a cloud drive?**
 Backups are encrypted exactly like the vault, so a copy on a cloud drive is protected by

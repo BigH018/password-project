@@ -478,7 +478,12 @@ python -m vaultkeeper  # run the app
 - Before the FIRST push: run a secrets check over the whole history (vault files, `.env`,
   anything credential-like), confirm `.gitignore` covers `*.vault`, `backups/`, exports, logs
   and `.env`, and report the result before asking.
-- The remote must be a PRIVATE repository. If that can't be confirmed, say so before the first push.
+- The repository is **PUBLIC** (user's choice, 2026-10-02): everything pushed, including
+  history, is visible to everyone. Never push personal details (the user's domain, real
+  emails, names, paths): they belong in local settings, not in code, tests or docs.
+- Releases: zip only the windowed `Account Manager` folder as
+  `Account-Manager-<version>-windows.zip` and attach it to a GitHub Release (`v<version>`),
+  only with the user's approval in that turn (same rule as pushes).
 
 ## 11. Definition of Done
 - [ ] Right layer. No PyQt5 in headless packages. No logic in UI.
@@ -503,6 +508,7 @@ Since then (2026-10-02): rank pictures (schema v3), the Game setup redesign (tab
 Phase 8e, the Windows .exe (`packaging/vaultkeeper.spec`, build command in README; choices
 in docs/DECISIONS.md). All planned phases are done. Rebuild the .exe after code changes.
 Email generator added (gamename.k7q4@domain, domain in Settings; see docs/DECISIONS.md).
+Repo made public with a v0.1.0 GitHub Release (zipped .exe) so friends can download it.
 
 ### Work rules for a list of tasks or fixes
 Do them in the agreed order, ONE COMMIT PER TASK. For each one: check whether it's already

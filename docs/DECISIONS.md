@@ -189,6 +189,13 @@ is when the user decided. Add new decisions here.
   with the rest of the entry, password included, when the user presses Save). The game name
   is pre-filled from the form's game (Tools menu: the selected sidebar game) and editable.
   Copy uses the normal clipboard guard (auto-cleared like other copies).
+- Public repo + releases (user, 2026-10-02): the GitHub repo is public so friends can use
+  the app. History was checked first (no secrets, vault files or paths; the user's own email
+  on early commits is already public on their profile). The email generator's default domain
+  is `example.com`: the user's real domain lives only in their settings file. Friends download
+  a GitHub Release: `Account-Manager-<version>-windows.zip` holding only the windowed
+  `Account Manager` folder (the console copy is for troubleshooting and stays out). README
+  "Getting started" leads with this download path; running from source is option B.
 
 ## Known issues and deferred items
 
