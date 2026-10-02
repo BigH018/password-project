@@ -11,7 +11,7 @@ If a request conflicts with these rules, say so before acting.
 ### How to start every session
 1. Read CLAUDE.md (it loads automatically). The file tree in §3.2 is your map of the project.
    It is accurate, so do NOT scan the repo or open every file to "get oriented".
-2. Check §13 Status to see which phase we are in and what is built. Past decisions are in
+2. Check §12 Status to see what is built and what is next. Past decisions are in
    `docs/DECISIONS.md`: grep it when a task touches an earlier choice.
 3. Classify the task with the routing table below. Read ONLY the files listed for that task
    type, plus anything those files directly need.
@@ -78,7 +78,7 @@ number of accounts across several games (Valorant, Marvel Rivals, Overwatch and 
 - **Never ask for real credentials**, not even one for testing.
 - Fake data only: `player1@example.test`, `FakePlayer#TEST`, `Fake-Passw0rd-1!`, etc.
 - Never commit `*.vault`, backups, exports, `.env`, logs or anything in `backups/`.
-- Backups work (Phase 5). The user should choose a backup folder (File -> Backups...) before
+- The user should choose a backup folder (File -> Backups...) before
   entering real accounts; the app shows a "backups are off" banner until they do.
 
 ---
@@ -110,7 +110,7 @@ scripts/recover_vault.py is standalone: it must NOT import vaultkeeper.
    backend, scheduler). No module-level singletons holding state.
 
 ### 3.2 File tree
-(P) = later phase. Any file past **~300 lines** gets flagged to the user for splitting.
+(P) = not built yet. Any file past **~300 lines** gets flagged to the user for splitting.
 ```
 vaultkeeper/                       repo root
   CLAUDE.md                        this rulebook
@@ -128,7 +128,7 @@ vaultkeeper/                       repo root
   scripts/
     recover_vault.py               standalone decrypt-to-stdout (cryptography + argon2-cffi only)
   packaging/
-    vaultkeeper.spec          (P)  PyInstaller spec (phase 8)
+    vaultkeeper.spec          (P)  PyInstaller spec (phase 8e)
     icon_source_32px.ico           the user's 32px icon: app_icon.ico is built from it (crisp
                                    pixel upscale to 16-256px; the app uses only the .ico)
     icon_source.jpg                the user's 1920px icon art, used only for docs/images/icon.png
@@ -460,154 +460,32 @@ python -m vaultkeeper  # run the app
 - [ ] No unapproved dependencies. Versions pinned.
 - [ ] Tests added/updated, including failure paths. **Full suite + ruff pass**, reported honestly.
 - [ ] Fake data only. No vault/backup files staged.
-- [ ] **Map and routing table updated** (§0, §3.2). §13 Status updated. docs/README updated if affected.
+- [ ] **Map and routing table updated** (§0, §3.2). §12 Status updated. docs/README updated if affected.
 - [ ] Staged files checked for secrets. Push only with the user's approval (§10a).
 - [ ] Summary to user (built / unsure). Wait for go-ahead. Commit after approval.
 
-## 12. Build phases (one at a time, stop after each)
-1. Scaffold, config (constants with verified rank presets, settings, paths, logging), errors, models, serialization, validation.
-2. Crypto + storage + vault service (+ password policy, recovery script), with thorough tests.
-3. Account + game services, search/filter, duplicate detection.
-4. PyQt5 UI: create/unlock (KDF off the UI thread; damaged vault → OFFER `.bak`, never silent,
-   with a pytest-qt test), main window, account dialog, game grouping, search.
-5. Clipboard auto-clear, auto-lock (+ session lock), password generator, **encrypted export and rotating backups**.
-6. Quick Add, batch mode, paste assist.
-7. ~~TOTP~~ skipped by the user (2026-10-01).
-8. Polish: dark theme, settings dialog, error handling, PyInstaller .exe.
+## 12. Status
+Phases 1-6 are done and pushed: core, crypto/storage, services, UI, clipboard/auto-lock,
+backups/export, Quick Add. Phase 7 (TOTP) was skipped by the user. The code review and security
+audit fixes (32 items, 2026-10-01) are all done and pushed. Past decisions, known issues and
+deferred items (including manual checks only the user can do) are in `docs/DECISIONS.md`:
+grep it when a task touches an earlier choice, and record new decisions there.
 
----
+- [ ] **Phase 8e: .exe (next).** Decided: PyInstaller one-folder build, windowed (`app.py`
+      already guards prints when stdout is None), bundle dark.qss and the icon from
+      `ui/assets/`, spec in `packaging/vaultkeeper.spec`. Antivirus false positives: mention,
+      don't work around.
 
-## 13. Decisions & Status
+### Work rules for a list of tasks or fixes
+Do them in the agreed order, ONE COMMIT PER TASK. For each one: check whether it's already
+done; for a bug, write the failing test first and confirm it fails for the RIGHT reason; make
+the change; run the relevant tests, then the full suite + ruff; `git status` +
+`git diff --cached --stat` (nothing sensitive staged); commit locally with a plain message.
+Update the map/routing/docs in the same commit. If a task is bigger or riskier than expected,
+or needs a vault format change, stop and ask. If you disagree with a request, say so with
+evidence instead of changing code. After a group of tasks, summarise and ask to push (§10a).
 
-### Decisions
-The approved decision log lives in `docs/DECISIONS.md` (with known issues and deferred
-items). Grep it when a task touches an earlier choice, and record new decisions there.
-
-### Status
-- [x] Step 0: CLAUDE.md + plan approved
-- [x] Phase 1: Scaffold, config, models
-- [x] Phase 2: Crypto, storage, vault service, recovery script
-- [x] Phase 3: Account/game services, search (validation later split into
-      text_validation.py + validation.py)
-- [x] Phase 4: Core UI
-  - [x] 4a: foundation, welcome, create, unlock (+ backup offer/banner), task runner, shell, --demo
-  - [x] 4b: full main window (sidebar, search, table, lock, change master password)
-  - [x] 4c: account dialog, game manager (replaced by Game setup in 4d)
-  - [x] 4d: per-game templates (custom ranks/regions/fields/extra fields), Game setup, schema v2
-- [x] Phase 5: Clipboard, auto-lock, generator, export, backups
-- [x] Phase 6: Quick Add, batch mode, paste assist (pushed with the docs update)
-- [-] Phase 7: TOTP (skipped by the user)
-- [ ] Phase 8: Polish + packaging (IN PROGRESS)
-  - [x] 8a: dark theme (dark.qss loaded by theme.py)
-  - [x] 8a+: branding (title, icon, taskbar id), main window hidden while locked
-  - [x] 8b: settings dialog  - [x] 8c: window geometry  - [x] 8d: error dialog
-  - [ ] 8e: .exe (after the review fixes below). Decided: PyInstaller one-folder build,
-        windowed (`app.py` already guards prints when stdout is None), bundle dark.qss and
-        the icon from `ui/assets/`, spec in `packaging/vaultkeeper.spec`. Antivirus false
-        positives: mention, don't work around.
-- [x] Review fixes (CR = code review, SEC = security audit), 2026-10-01: all 32 steps done
-      (open follow-ups in docs/DECISIONS.md "Known issues and deferred items")
-
-### Review fixes: handoff (read this when continuing in a fresh session)
-Work rules the user set: fix in the order below, ONE COMMIT PER FIX. For each fix: check
-whether it's already done; write the failing test first and confirm it fails for the RIGHT
-reason; fix; run the relevant tests, then the full suite + ruff; `git status` +
-`git diff --cached --stat` (nothing sensitive staged); commit locally with a plain message,
-no attribution. Update the map/routing/docs in the same commit. STOP after each group:
-summarise, ask "I think this is a good point to push. Can I push to GitHub?" with the commit
-list, and wait (push only on a yes in that turn). No vault format change expected: if one
-is needed, stop and ask. If a fix is bigger or riskier than expected, stop and say so. If
-you disagree with a finding, say so with evidence instead of changing code. If context gets
-long: finish the group, ask for the push, and tell the user to continue with "continue from
-Group N".
-
-Group 1 (done, pushed):
-- [x] 1 SEC-H1 user data never rendered as HTML (`ui/safe_text.py`, architecture rule)
-- [x] 2 SEC-H2 SecretField.clear() wipes undo history
-- [x] 3 SEC-Low2 paste assist keeps secret values exactly as pasted (no NFC)
-
-Group 2 (done, pushed with this CLAUDE.md update):
-- [x] 4 CR-H1/SEC-Low8 quarantine copies the damaged main file, never moves it
-- [x] 5 CR-L2 a main file that no longer decrypts never becomes `.bak`
-- [x] 6 CR-M1/SEC-M1 after a password change: `.bak` re-saved, backup now, offer to delete
-      old-password backups (found by header salt)
-- [x] 7 CR-H2 backup failures logged (type only) + banner until a backup works; status
-      times in settings; Backups dialog shows last success
-- [x] 8 SEC-M2 instance lock (`VaultInstanceLock`, QLockFile) + save refused if the file
-      changed on disk (`core/vault_disk.py`, VaultConflictError)
-
-Group 3 (done, pushed): entry workflow and lock rule
-- [x] 9 CR-M2 switching game on the account form resets rank/region not in the new game's
-      list; "not in list" values are kept only for the account's own stored game
-- [x] 10 CR-M3 Tag empty + Name contains name#tag -> split with split_tagged_id (focus-out
-      or save)
-- [x] 11 CR-M4 deleteLater() on context menus after exec_() (copy_actions.py) and on the
-      QMessageBox in messages.py (nothing holding secrets survives a lock); test menus deleted
-- [x] 12 CR-L1 backup rotation sorts by parsed timestamp + counter, not file name
-      (same-second backups)
-- [x] 13 SEC-M3 show "Last saved: <updated_at>" on unlock; keep last-seen updated_at per
-      vault path in settings (timestamp only); warn if the vault goes backwards in time
-
-Group 4 (done, pushed): input and key-derivation hardening
-- [x] 14 SEC-Low1 password_policy: NFC first, strip surrounding whitespace and Unicode Cf
-      before length/common-list checks (tests: decomposed chars, trailing space, ZWSP)
-- [x] 15 SEC-Low3 reject Unicode Cf in names, logins, identity fields (ZWJ only if needed
-      for emoji: tell the user); tests for LRM, RLM, ZWSP, word joiner, soft hyphen, tag chars
-- [x] 16 SEC-Low4/5 Argon2 HashingError (e.g. low memory) -> clear VaultKeeperError; lone
-      surrogates (UnicodeEncodeError) in kdf.py -> VaultAuthError without echoing the char
-- [x] 17 SEC-Low7 temp files opened exclusively (O_EXCL, no symlink following) in
-      vault_file.py and the settings writer; warn (don't block) at create/open if the folder
-      looks writable by other users (e.g. directly under C:\)
-- [x] 18 SEC-Low6 "Show passwords" switches off after a configurable timeout (default 30 s)
-      and on lock; optional setting (off, Windows only, tested no-op elsewhere) for
-      SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)
-
-Group 5 (done, pushed): small and deferred items
-- [x] 19 CR-L3 full paths required in backup/export dialogs; unreadable folders handled
-      without "Something went wrong"; don't list the folder on every keystroke (debounce or
-      on confirm)
-- [x] 20 CR-L7 tell the user where the .damaged copy was saved (`last_damaged_copy`)
-- [x] 21 CR-L4 game setup warns before discarding unsaved edits (switching game, Close)
-- [x] 22 CR-L6 backups off the UI thread via the injected TaskRunner; keep the failure
-      banner; lock waits for or safely cancels a running backup
-- [x] 23 CR-L8 `_prepare_change` must not read `self._session` on the worker thread: pass
-      what it needs as arguments (it also copies `disk_digest` now)
-- [x] 24 CR-L9 directory fsync failure after a successful replace: don't report "could not
-      save" or undo the change; log the type and carry on
-- [x] 25 CR-L5 native file pickers aren't counted as activity / not closed by
-      close_dialogs: try Qt's non-native dialogs; switch if reasonable, else report options
-
-Group 6 (done): cleanup (one commit each)
-- [x] 26 remove dead code: clean_preset_key, split_tagged_id (only if unused after 10),
-      PasteSuggestions.describe, ClipboardGuard.holds_copy, AccountFilter.is_empty,
-      InactivityTracker.enabled, AccountForm._current_game. Report whether kdf_needs_upgrade
-      is used (propose an upgrade prompt, don't build) and whether pyotp is still needed
-      DONE: removed all but split_tagged_id (used by split_name_and_tag). Reported to the
-      user: kdf_needs_upgrade unused by the UI (upgrade prompt proposed, not built); pyotp
-      unused (removal awaits the user's OK).
-- [x] 27 make `_BIDI_CONTROLS` public (now `BIDI_CONTROLS`), update importers
-- [x] 28 Quick Add opens on the sidebar's selected game, else the last batch game
-- [x] 29 cache the template-to-preset conversion in account_table.py
-- [x] 30 split tests/test_vault_service.py and tests/ui/test_phase5_ui.py under ~300 lines;
-      also split `ui/app_controller.py` (394 lines: move backup/export wiring out),
-      `core/backup.py` (306: e.g. old-password helpers out) and
-      `core/vault_service.py` (319); flag `ui/main_window.py` (~300)
-      DONE for tests (also test_vault_file.py and test_backup.py; every test file < 300,
-      all 1394 test IDs still collected). Source files over the limit are flagged in
-      docs/DECISIONS.md (split only with the user's OK).
-- [x] 31 move the §13 decision log to docs/DECISIONS.md with a pointer; add known/deferred:
-      SEC-M4 (Qt 5.15.2 CVEs, plan PyQt6) and SEC-Low9 (log tracebacks contain full paths);
-      README note that log files shouldn't be shared
-- [x] 32 add any missing tests the reviews listed that aren't covered above
-      Only the 32-item summary was available (not the review reports), so no extra tests could
-      be identified; every fix has tests and docs/VAULT_FORMAT.md's required tests all exist.
-- [x] Final: whole suite (1401 passed, 1 skipped) + slow test + ruff pass; final push asked
-
-Open items to mention to the user: confirm by hand that copied passwords don't appear in
-Win+V clipboard history, and that a second copy of the app says "already open" on the real
-vault (demo mode uses a fresh temp folder each time, so it can't show this).
-
-### Practical notes for future sessions
+### Practical notes
 - The file-writing tool can turn `\uXXXX`/`\x..` escapes into raw characters: write such
   characters with `chr(...)`, and run the tests (ASCII check) after writing.
 - Long multi-line patches through bash heredocs sometimes fail to parse: write a small
