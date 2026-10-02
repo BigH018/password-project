@@ -39,10 +39,14 @@ MAX_EXTRA_VALUE = 500
 
 @dataclass(frozen=True, slots=True)
 class TierDef:
-    """One rank tier and how many divisions it has (0 = none, e.g. Radiant)."""
+    """One rank tier, how many divisions it has (0 = none, e.g. Radiant) and its picture.
+
+    ``image`` is a small PNG (see ``core/rank_image.py``) or None. It is left out of repr.
+    """
 
     name: str
     divisions: int = 0
+    image: bytes | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True, slots=True)

@@ -11,6 +11,7 @@ import pytest
 from conftest import FAST_KDF, MASTER, OTHER_MASTER
 from fake_data import make_vault
 from vaultkeeper.core.exporter import check_export_path, write_export
+from vaultkeeper.core.models import SCHEMA_VERSION
 from vaultkeeper.core.serialization import dumps_payload, loads_payload
 from vaultkeeper.crypto import envelope
 from vaultkeeper.crypto.header import FileKind
@@ -67,7 +68,7 @@ def test_recovery_script_reads_exports(tmp_path: Path) -> None:
         timeout=60, check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert '"schema_version": 2' in result.stdout
+    assert f'"schema_version": {SCHEMA_VERSION}' in result.stdout
 
 
 def test_cancelled_export_writes_nothing(tmp_path: Path) -> None:

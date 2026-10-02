@@ -68,20 +68,20 @@ def test_bad_schema_version(fake_vault: VaultData, version: Any) -> None:
 
 
 def test_migration_chain_runs_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Simulate a future schema v3: v1 payloads go through 1->2 then 2->3."""
+    """Simulate a future schema v4: v1 payloads go through 1->2, 2->3 then 3->4."""
     calls: list[int] = []
 
     def step(obj: dict[str, Any]) -> dict[str, Any]:
         calls.append(obj["schema_version"])
         return {**obj, f"migrated_from_{obj['schema_version']}": True}
 
-    monkeypatch.setattr(s, "SCHEMA_VERSION", 3)
-    monkeypatch.setitem(s.MIGRATIONS, 1, step)
-    monkeypatch.setitem(s.MIGRATIONS, 2, step)
+    monkeypatch.setattr(s, "SCHEMA_VERSION", 4)
+    for version in (1, 2, 3):
+        monkeypatch.setitem(s.MIGRATIONS, version, step)
     result = s.migrate({"schema_version": 1})
-    assert calls == [1, 2]
-    assert result["schema_version"] == 3
-    assert result["migrated_from_1"] and result["migrated_from_2"]
+    assert calls == [1, 2, 3]
+    assert result["schema_version"] == 4
+    assert result["migrated_from_1"] and result["migrated_from_3"]
 
 
 def test_missing_migration_step_refused(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,6 +121,10 @@ def _mutations() -> list[tuple[str, Any]]:
         ("template extra key", setv(["games", 0, "template", "x"], 1)),
         ("divisions too big", setv(["games", 0, "template", "tiers", 0, "divisions"], 11)),
         ("divisions bool", setv(["games", 0, "template", "tiers", 0, "divisions"], True)),
+        ("tier missing image", drop(["games", 0, "template", "tiers", 0, "image"])),
+        ("image not str", setv(["games", 0, "template", "tiers", 0, "image"], 123)),
+        ("image bad base64", setv(["games", 0, "template", "tiers", 0, "image"], "not base64!")),
+        ("image not png", setv(["games", 0, "template", "tiers", 0, "image"], "R0lGODlh")),
         ("hidden core field", setv(["games", 0, "template", "hidden_fields"], ["password"])),
         ("bad field kind", setv(["games", 0, "template", "custom_fields"], [BAD_FIELD])),
         ("extra not dict", setv(["accounts", 0, "extra"], [])),

@@ -16,13 +16,14 @@ from vaultkeeper.core.game_template import (
     GameTemplate,
     TierDef,
 )
+from vaultkeeper.core.rank_image import image_from_text, image_to_text
 from vaultkeeper.errors import VaultFormatError
 
 _TEMPLATE_KEYS = frozenset({
     "tiers", "best_division_is_one", "roman_divisions", "regions", "hidden_fields",
     "custom_fields",
 })  # fmt: skip
-_TIER_KEYS = frozenset({"name", "divisions"})
+_TIER_KEYS = frozenset({"name", "divisions", "image"})
 _FIELD_KEYS = frozenset({"id", "label", "kind", "choices"})
 
 
@@ -33,7 +34,7 @@ def _fail(path: str) -> VaultFormatError:
 def template_to_dict(template: GameTemplate) -> dict[str, Any]:
     """Serialize a template."""
     return {
-        "tiers": [{"name": t.name, "divisions": t.divisions} for t in template.tiers],
+        "tiers": [_tier_to_dict(t) for t in template.tiers],
         "best_division_is_one": template.best_division_is_one,
         "roman_divisions": template.roman_divisions,
         "regions": list(template.regions),
@@ -43,6 +44,11 @@ def template_to_dict(template: GameTemplate) -> dict[str, Any]:
             for f in template.custom_fields
         ],
     }
+
+
+def _tier_to_dict(tier: TierDef) -> dict[str, Any]:
+    image = None if tier.image is None else image_to_text(tier.image)
+    return {"name": tier.name, "divisions": tier.divisions, "image": image}
 
 
 def _obj(value: Any, path: str, keys: frozenset[str]) -> dict[str, Any]:
@@ -71,7 +77,12 @@ def _tier(value: Any, path: str) -> TierDef:
     if (not isinstance(divisions, int) or isinstance(divisions, bool)
             or not 0 <= divisions <= MAX_DIVISIONS):
         raise _fail(f"{path}.divisions")
-    return TierDef(obj["name"], divisions)
+    image = None
+    if obj["image"] is not None:
+        image = image_from_text(obj["image"])
+        if image is None:
+            raise _fail(f"{path}.image")
+    return TierDef(obj["name"], divisions, image)
 
 
 def _field(value: Any, path: str) -> CustomField:

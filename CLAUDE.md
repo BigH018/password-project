@@ -36,7 +36,7 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | Crypto, KDF, vault format | docs/VAULT_FORMAT.md, crypto/*, storage/vault_file.py, errors.py | scripts/recover_vault.py (must stay in sync with the format); tests/test_header, test_kdf, test_cipher, test_envelope, test_vault_file, test_recover_script |
 | Vault lifecycle (create, unlock, lock, change password) | core/vault_service.py, core/vault_disk.py, core/tasks.py, core/password_policy.py, errors.py, core/serialization.py | crypto/ signatures, storage/vault_file.py signatures, tests/test_vault_service.py, test_vault_disk.py, test_password_policy.py |
 | Accounts, games, search, duplicates | docs/DATA_MODEL.md, core/models.py, core/game_template.py, the relevant service (account_service, game_service or search), core/store.py, core/validation.py | core/text_validation.py, matching test file, tests/conftest.py (FakeStore) |
-| Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/game_template.py, core/serialization.py, core/template_codec.py, core/migrations.py, tests/test_serialization.py, tests/test_migrations.py | grep ui/ for the field to see where it is displayed |
+| Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/game_template.py, core/rank_image.py, core/serialization.py, core/template_codec.py, core/migrations.py, tests/test_serialization.py, tests/test_migrations.py | grep ui/ for the field to see where it is displayed |
 | A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/safe_text.py, ui/file_pickers.py, ui/theme.py, and signatures of the services it calls (main window: also ui/accounts_view.py) | ui/app_controller.py (screen flow), ui/qt_adapters.py, tests/ui_support.py, matching tests/ui file |
 | App startup, demo mode | app.py, demo.py, ui/app_controller.py | config/settings.py, config/logging_setup.py, tests/test_demo.py |
 | Game templates, Game setup | docs/DATA_MODEL.md, core/game_template.py, core/template_validation.py, ui/game_setup_dialog.py | ui/widgets/ladder_editor.py, extra_fields_editor.py, account_form.py, tests/test_templates.py, tests/ui/test_game_setup.py |
@@ -150,10 +150,14 @@ vaultkeeper/                       repo root
                                    hooks log type/location, then call an argument-less on_error
     core/
       models.py                    dataclasses: Account (+ extra values), Game (+ template), Rank, VaultData
-      game_template.py             GameTemplate/TierDef/CustomField, starters from presets
+      game_template.py             GameTemplate/TierDef (+ optional picture)/CustomField,
+                                   starters from presets
       template_codec.py            GameTemplate <-> JSON dict (strict structure checks)
       template_validation.py       clean_template (Game setup) + clean_extra (extra field values)
-      migrations.py                migrate_v1_to_v2 (preset key -> template, accounts get extra)
+      migrations.py                migrate_v1_to_v2 (preset key -> template, accounts get extra),
+                                   migrate_v2_to_v3 (ranks get image: null)
+      rank_image.py                rank pictures: small-PNG check (<= 64x64, 24 KB, no Qt) +
+                                   base64 text form stored in the template
       serialization.py             VaultData <-> JSON dict, structure validation, runs migrations
       text_validation.py           generic text/secret/email/URL/uuid checks (clean_* helpers;
                                    identity=True rejects Unicode Cf), strip_format_characters
@@ -267,7 +271,7 @@ vaultkeeper/                       repo root
     ui_support.py                  pytest plugin: off-screen Qt, QtTaskRunner, Gate (blocking KDF),
                                    SessionGuard shutdown + gc after each test, default stubs for
                                    messages.confirm/show_error/show_warning
-    fake_data.py                   obviously fake games/accounts
+    fake_data.py                   obviously fake games/accounts, tiny_png() test picture
     test_architecture.py           AST scan: no PyQt5 in headless layers, no forbidden calls/imports,
                                    labels/message boxes only via ui/safe_text.py, dialogs
                                    only via messages.run_modal, file pickers only via
@@ -292,7 +296,8 @@ vaultkeeper/                       repo root
     test_accounts.py, test_games.py, test_search.py
     test_demo.py                   demo stays in temp, fake data only, cleaned up (even with open logs)
     test_templates.py              templates: presets, codec, validation, extra values, secret search
-    test_migrations.py             schema v1 -> v2 (incl. a real encrypted v1 vault)
+    test_migrations.py             schema v1 -> v2 -> v3 (incl. a real encrypted v1 vault)
+    test_rank_image.py             rank picture PNG check, base64 round trip
     test_backup.py                 copies, rotation, paths; test_backup_status.py: failures,
                                    password-change helpers, prepare/run/finish
     test_exporter.py, test_clipboard.py, test_autolock.py, test_generator.py
@@ -384,7 +389,7 @@ vaultkeeper/                       repo root
 ## 7. Vault format (summary → `docs/VAULT_FORMAT.md`)
 Binary header (magic `VKVAULT\0`, format version, file kind vault/export, Argon2id params,
 salt, cipher id, nonce, ciphertext length) + AES-256-GCM ciphertext of a UTF-8 JSON payload
-with `schema_version` (currently 2). Key = Argon2id over the NFC-normalized UTF-8 password.
+with `schema_version` (currently 3). Key = Argon2id over the NFC-normalized UTF-8 password.
 KDF defaults t=4, m=512 MiB, p=4 (about 0.3 s on the dev PC; target under ~1 s on a modest
 PC). Backups are byte copies; exports use file kind 2. Any format change must update
 `docs/VAULT_FORMAT.md`, `scripts/recover_vault.py` and `tests/test_recover_script.py` together.

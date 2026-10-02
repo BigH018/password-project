@@ -2,12 +2,28 @@
 
 from __future__ import annotations
 
+import struct
+import zlib
 from typing import Any
 
 from vaultkeeper.core.game_template import starter_template
 from vaultkeeper.core.models import Account, Game, Rank, VaultData, new_id, utc_now_iso
+from vaultkeeper.core.rank_image import PNG_SIGNATURE
 
 FAKE_PASSWORD = "Fake-Passw0rd-1!"
+
+
+def _png_chunk(kind: bytes, body: bytes) -> bytes:
+    crc = zlib.crc32(kind + body)
+    return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", crc)
+
+
+def tiny_png(width: int = 4, height: int = 4) -> bytes:
+    """A real (decodable) solid red RGBA PNG, built with the standard library only."""
+    row = bytes((0,)) + bytes((255, 0, 0, 255)) * width  # filter byte + pixels
+    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return (PNG_SIGNATURE + _png_chunk(b"IHDR", header)
+            + _png_chunk(b"IDAT", zlib.compress(row * height)) + _png_chunk(b"IEND", b""))
 
 
 def make_game(name: str = "Valorant", preset: str = "valorant") -> Game:

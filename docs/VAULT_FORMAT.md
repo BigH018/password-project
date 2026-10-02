@@ -74,9 +74,9 @@ Violations raise `VaultFormatError`. That's safe to report, because it reveals n
 UTF-8 JSON:
 ```json
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "games":    [{"id": "uuid", "name": "Valorant", "template": {
-                  "tiers": [{"name": "Iron", "divisions": 3}],
+                  "tiers": [{"name": "Iron", "divisions": 3, "image": null}],
                   "best_division_is_one": false, "roman_divisions": false,
                   "regions": ["NA", "EU"], "hidden_fields": [], "custom_fields": [
                     {"id": "uuid", "label": "Level", "kind": "number", "choices": []}]}}],
@@ -87,7 +87,8 @@ UTF-8 JSON:
 ```
 `format_version` covers the binary layout, and `schema_version` covers the JSON. Readers refuse
 newer versions. Migrations live in `core/migrations.py` as `migrate_vN_to_vN+1`, each with tests
-(`tests/test_migrations.py`, which includes opening a real encrypted v1 vault).
+(`tests/test_migrations.py`, which includes opening a real encrypted v1 vault). A rank
+`image` is base64 of a small PNG (at most 64x64 pixels, 24 KB; `core/rank_image.py`).
 
 ## KDF defaults and rationale
 

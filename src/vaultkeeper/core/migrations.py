@@ -49,5 +49,22 @@ def migrate_v1_to_v2(obj: dict[str, Any]) -> dict[str, Any]:
     return obj
 
 
+def migrate_v2_to_v3(obj: dict[str, Any]) -> dict[str, Any]:
+    """v3: each rank in a game's template may carry a picture (``image``, null = none)."""
+    games = obj.get("games")
+    if not isinstance(games, list):
+        return obj  # malformed: the strict parser will report it
+    for game in games:
+        template = game.get("template") if isinstance(game, dict) else None
+        tiers = template.get("tiers") if isinstance(template, dict) else None
+        for tier in tiers if isinstance(tiers, list) else ():
+            if isinstance(tier, dict):
+                tier.setdefault("image", None)
+    return obj
+
+
 # Keyed by the version they upgrade FROM.
-MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {1: migrate_v1_to_v2}
+MIGRATIONS: dict[int, Callable[[dict[str, Any]], dict[str, Any]]] = {
+    1: migrate_v1_to_v2,
+    2: migrate_v2_to_v3,
+}

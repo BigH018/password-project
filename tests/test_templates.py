@@ -6,7 +6,7 @@ from dataclasses import replace
 
 import pytest
 
-from fake_data import make_account, make_game
+from fake_data import make_account, make_game, tiny_png
 from vaultkeeper.config import constants as c
 from vaultkeeper.core.game_template import (
     CustomField,
@@ -66,6 +66,35 @@ def test_codec_rejects_duplicate_field_ids() -> None:
     raw = template_to_dict(replace(FORTNITE, custom_fields=(LEVEL, LEVEL)))
     with pytest.raises(VaultFormatError):
         template_from_dict(raw, "t")
+
+
+def test_codec_round_trips_rank_pictures() -> None:
+    template = replace(FORTNITE, tiers=(TierDef("Bronze", 3, tiny_png()), TierDef("Elite")))
+    raw = template_to_dict(template)
+    assert isinstance(raw["tiers"][0]["image"], str) and raw["tiers"][1]["image"] is None
+    assert template_from_dict(raw, "t") == template
+
+
+@pytest.mark.parametrize("image", [123, "not base64!", "R0lGODlh"])  # last: a GIF header
+def test_codec_rejects_bad_rank_pictures(image: object) -> None:
+    raw = template_to_dict(FORTNITE)
+    raw["tiers"][0]["image"] = image
+    with pytest.raises(VaultFormatError, match=r"tiers\[0\]\.image"):
+        template_from_dict(raw, "t")
+
+
+def test_rank_picture_kept_and_hidden_from_repr() -> None:
+    tier = TierDef(" Bronze ", 3, tiny_png())
+    cleaned = clean_template(replace(FORTNITE, tiers=(tier,)))
+    assert cleaned.tiers == (TierDef("Bronze", 3, tiny_png()),)
+    assert "image" not in repr(tier)
+
+
+@pytest.mark.parametrize("image", [b"GIF89a" + bytes(40), b"", "a string"])
+def test_clean_template_rejects_bad_rank_pictures(image: object) -> None:
+    bad = replace(FORTNITE, tiers=(TierDef("Bronze", 3, image),))  # type: ignore[arg-type]
+    with pytest.raises(ValidationError, match="ranks"):
+        clean_template(bad)
 
 
 def test_clean_template_normalizes() -> None:

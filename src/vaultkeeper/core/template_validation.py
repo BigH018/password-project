@@ -20,6 +20,7 @@ from vaultkeeper.core.game_template import (
     GameTemplate,
     TierDef,
 )
+from vaultkeeper.core.rank_image import is_valid_rank_image
 from vaultkeeper.core.text_validation import clean_secret, clean_text, clean_uuid
 from vaultkeeper.errors import ValidationError
 
@@ -41,7 +42,9 @@ def clean_template(template: GameTemplate) -> GameTemplate:
         name = clean_text(tier.name, "ranks", c.MAX_TIER, required=True)
         if not 0 <= tier.divisions <= MAX_DIVISIONS:
             raise ValidationError("ranks", f"divisions must be 0 to {MAX_DIVISIONS}")
-        tiers.append(TierDef(name, tier.divisions))
+        if tier.image is not None and not is_valid_rank_image(tier.image):
+            raise ValidationError("ranks", "has a picture that isn't a small PNG image")
+        tiers.append(TierDef(name, tier.divisions, tier.image))
     _unique_names([t.name for t in tiers], "ranks", "rank")
 
     if len(template.regions) > MAX_REGIONS:

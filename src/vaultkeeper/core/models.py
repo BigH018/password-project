@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from vaultkeeper.config.constants import DEFAULT_STATUS, GamePreset
 from vaultkeeper.core.game_template import GameTemplate
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Fields holding secrets: masked in UI, auto-cleared from clipboard, never logged.
 SECRET_FIELDS: tuple[str, ...] = ("password", "email_password", "totp_secret")

@@ -46,7 +46,8 @@ def test_script_decrypts_app_vault(make_service: Callable[..., VaultService],
     payload = json.loads(result.stdout)
     assert payload["schema_version"] == SCHEMA_VERSION
     assert payload["games"][0]["name"] == "Overwatch"
-    assert payload["games"][0]["template"]["tiers"][0] == {"name": "Bronze", "divisions": 5}
+    assert payload["games"][0]["template"]["tiers"][0] == {"name": "Bronze", "divisions": 5,
+                                                           "image": None}
     assert payload["accounts"][0]["display_name"] == "Recover\u00e9"
     assert payload["accounts"][0]["password"] == svc.data.accounts[0].password
 

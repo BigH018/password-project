@@ -1,4 +1,4 @@
-# Data model (schema_version 2)
+# Data model (schema_version 3)
 
 Reference for `core/models.py`, `core/game_template.py`, `core/serialization.py`,
 `core/migrations.py`, `core/validation.py`, `core/template_validation.py` and `config/constants.py`.
@@ -60,7 +60,10 @@ identity values it suggests.
 | template | GameTemplate | ranks, regions, fields (below)            |
 
 `GameTemplate` (`core/game_template.py`):
-- `tiers`: ordered lowest first, each `TierDef(name, divisions 0-10)`.
+- `tiers`: ordered lowest first, each `TierDef(name, divisions 0-10, image)`. `image` is an
+  optional rank picture (one per tier, shared by its divisions): PNG bytes, at most 64x64
+  pixels and 24 KB, checked by `core/rank_image.py`. The UI shrinks a picked .ico/.png file
+  to that size. Stored in the vault as base64 text (`null` = no picture).
 - `best_division_is_one`: True if division 1 is the top (Overwatch, Marvel Rivals). False if
   the highest number is the top (Valorant).
 - `roman_divisions`: show divisions as I/II/III.
@@ -139,3 +142,5 @@ these matches after trimming and case-folding:
   `migrate_v1_to_v2` copies built-in presets into templates. Custom games get a ladder and
   region list built from the distinct values their accounts already use. Account data is
   never changed.
+- **v3** (rank pictures, 2026-10-02): each tier in a template has an `image` key (base64 PNG
+  or `null`). `migrate_v2_to_v3` adds `"image": null` to every tier. Nothing else changes.

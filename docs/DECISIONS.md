@@ -165,6 +165,11 @@ is when the user decided. Add new decisions here.
   allowed in demo.py: architecture test). Changing it inside the demo still needs a strong one.
 - `--demo` uses a fresh `vaultkeeper-demo-*` folder in the system temp dir (vault, settings,
   logs), deleted on exit; leftovers are swept at the next demo start. Real settings untouched.
+- Rank pictures (user, 2026-10-02): one optional picture per rank tier (shared by its
+  divisions, even though Valorant has one per division), added by the user in Game setup
+  from an .ico/.png file. Stored inside the vault (schema v3), shrunk to at most 64x64 PNG,
+  so they are encrypted, backed up and move with the vault. No rank art ships with the app.
+  Shown in the accounts table, the account form's rank picker and the search rank filter.
 
 ## Known issues and deferred items
 
