@@ -154,7 +154,8 @@ def test_add_rank_dialog_asks_about_divisions(qtbot: Any) -> None:
     from vaultkeeper.ui.widgets.add_rank_dialog import AddRankDialog
 
     added: list[tuple[str, int]] = []
-    dialog = AddRankDialog(lambda name, div: added.append((name, div)), existing=["Gold"])
+    dialog = AddRankDialog(lambda name, div, _image: added.append((name, div)),
+                           existing=["Gold"])
     qtbot.addWidget(dialog)
     dialog.show()
     assert not dialog.count.isEnabled()  # no divisions until ticked

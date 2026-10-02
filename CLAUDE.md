@@ -39,7 +39,7 @@ Paths are relative to `src/vaultkeeper/` unless they start with `docs/`, `tests/
 | Data model or schema change | docs/DATA_MODEL.md, core/models.py, core/game_template.py, core/rank_image.py, core/serialization.py, core/template_codec.py, core/migrations.py, tests/test_serialization.py, tests/test_migrations.py | grep ui/ for the field to see where it is displayed |
 | A UI screen or dialog | that ui file, the widgets it uses, ui/messages.py, ui/safe_text.py, ui/file_pickers.py, ui/theme.py, and signatures of the services it calls (main window: also ui/accounts_view.py) | ui/app_controller.py (screen flow), ui/qt_adapters.py, tests/ui_support.py, matching tests/ui file |
 | App startup, demo mode | app.py, demo.py, ui/app_controller.py | config/settings.py, config/logging_setup.py, tests/test_demo.py |
-| Game templates, Game setup | docs/DATA_MODEL.md, core/game_template.py, core/template_validation.py, ui/game_setup_dialog.py | ui/widgets/ladder_editor.py, extra_fields_editor.py, account_form.py, tests/test_templates.py, tests/ui/test_game_setup.py |
+| Game templates, Game setup | docs/DATA_MODEL.md, core/game_template.py, core/template_validation.py, ui/game_setup_dialog.py | ui/widgets/ladder_editor.py, ui/rank_pictures.py, core/rank_image.py, extra_fields_editor.py, account_form.py, tests/test_templates.py, tests/ui/test_game_setup.py, tests/ui/test_rank_pictures.py |
 | Quick Add, batch mode, paste assist | ui/quick_add_dialog.py, core/entry_session.py, core/paste_assist.py, account_service signatures, core/validation.py signatures | tests/test_paste_assist.py, test_entry_session.py |
 | Clipboard, auto-lock, session lock | security/*, ui/session_guard.py, ui/qt_adapters.py, ui/copy_actions.py | tests/test_clipboard.py, test_autolock.py, tests/ui/test_phase5_ui.py |
 | Backups, export | core/backup.py, core/exporter.py, storage/vault_file.py, ui/backup_dialog.py, ui/export_dialog.py | docs/VAULT_FORMAT.md, ui/app_controller.py (wiring) |
@@ -235,9 +235,13 @@ vaultkeeper/                       repo root
                                    seconds, lock switches, show-passwords seconds, screen-capture
                                    exclusion, restore defaults, Backups... button
       generator_dialog.py          password generator (copy or "use" into the form)
-      file_pickers.py              choose_folder / choose_save_file / choose_open_file: Qt's own
+      file_pickers.py              choose_folder / choose_save_file / choose_open_file /
+                                   choose_image_file (.ico/.png): Qt's own
                                    (non-native) dialog, so auto-lock sees activity and lock
                                    closes it
+      rank_pictures.py             rank pictures: .ico/.png file -> PNG <= 64x64 (largest .ico
+                                   frame, PNG/ICO only, <= 5 MB), picture_icon/pixmap,
+                                   PicturePicker (remembers the folder, error box if unusable)
       safe_text.py                 plain_label / message_box (Qt.PlainText: user data is never
                                    rendered as HTML), link_label for fixed app text only
       messages.py                  generic error texts (error_text, FIELD_LABELS = on-screen field
@@ -251,8 +255,10 @@ vaultkeeper/                       repo root
         game_sidebar.py            "All games" + games with counts
         search_bar.py              free text + status/rank/region/label dropdowns -> AccountFilter
         account_form.py            form built from the game template (hidden fields, extra fields)
-        ladder_editor.py           rank list editor: tiers + divisions, order, division style
-        add_rank_dialog.py         quick add: rank name, has divisions? how many (1-10); Enter = next
+        ladder_editor.py           rank list editor: tiers + divisions + pictures (Set/Remove
+                                   picture), order, division style
+        add_rank_dialog.py         quick add: rank name, has divisions? how many (1-10), optional
+                                   picture; Enter = next
         extra_fields_editor.py     extra fields editor: label, type, dropdown options (ids kept)
         rank_picker.py             RankPicker (tier + division) and RegionPicker, driven by the game
                                    template; values not in the list shown marked, never dropped
@@ -327,7 +333,8 @@ vaultkeeper/                       repo root
                                    test_dialog_paths (full paths, unreadable folders, debounce),
                                    test_file_pickers (non-native, closed on lock, activity),
                                    test_account_table (rank preset built once per game),
-                                   test_secret_field (clear() wipes undo in all password dialogs)
+                                   test_secret_field (clear() wipes undo in all password dialogs),
+                                   test_rank_pictures (file -> picture, set/remove, add form, save)
 ```
 
 ---
@@ -479,7 +486,8 @@ grep it when a task touches an earlier choice, and record new decisions there.
 - [ ] **Phase 8e: .exe (next).** Decided: PyInstaller one-folder build, windowed (`app.py`
       already guards prints when stdout is None), bundle dark.qss and the icon from
       `ui/assets/`, spec in `packaging/vaultkeeper.spec`. Antivirus false positives: mention,
-      don't work around.
+      don't work around. Bundle Qt's `imageformats/qico.dll` (rank pictures from .ico files)
+      and check it works in the built .exe.
 
 ### Work rules for a list of tasks or fixes
 Do them in the agreed order, ONE COMMIT PER TASK. For each one: check whether it's already

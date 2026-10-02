@@ -14,6 +14,7 @@ from vaultkeeper.config.constants import VAULT_EXTENSION
 from vaultkeeper.ui.messages import run_modal
 
 VAULT_FILTER = f"Vault files (*{VAULT_EXTENSION})"
+IMAGE_FILTER = "Pictures (*.ico *.png)"
 
 
 def _picker(parent: QWidget | None, title: str, start: str, mode: QFileDialog.FileMode,
@@ -51,4 +52,11 @@ def choose_open_file(parent: QWidget | None, title: str, start: str) -> str:
     """Pick an existing .vault file."""
     dialog = _picker(parent, title, start, QFileDialog.ExistingFile)
     dialog.setNameFilter(VAULT_FILTER)
+    return _run(dialog)
+
+
+def choose_image_file(parent: QWidget | None, title: str, start: str) -> str:
+    """Pick an existing .ico or .png picture (rank pictures)."""
+    dialog = _picker(parent, title, start, QFileDialog.ExistingFile)
+    dialog.setNameFilter(IMAGE_FILTER)
     return _run(dialog)

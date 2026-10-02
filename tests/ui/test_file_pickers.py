@@ -44,6 +44,7 @@ def chosen(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[QFileDialog]
     lambda: file_pickers.choose_folder(None, "Choose a folder", ""),
     lambda: file_pickers.choose_save_file(None, "Save", ""),
     lambda: file_pickers.choose_open_file(None, "Open", ""),
+    lambda: file_pickers.choose_image_file(None, "Picture", ""),
 ])
 def test_pickers_are_qt_dialogs(qapp: Any, chosen: list[QFileDialog], pick: Any) -> None:
     assert pick()  # returns the selected path
@@ -54,6 +55,12 @@ def test_save_picker_adds_the_vault_extension_filter(qapp: Any,
                                                      chosen: list[QFileDialog]) -> None:
     file_pickers.choose_save_file(None, "Save", "")
     assert ".vault" in chosen[0].nameFilters()[0]
+
+
+def test_image_picker_offers_ico_and_png(qapp: Any, chosen: list[QFileDialog]) -> None:
+    file_pickers.choose_image_file(None, "Picture", "")
+    assert chosen[0].nameFilters()[0].endswith("(*.ico *.png)")
+    assert chosen[0].fileMode() == QFileDialog.ExistingFile
 
 
 def test_lock_closes_an_open_picker(qapp: Any) -> None:
